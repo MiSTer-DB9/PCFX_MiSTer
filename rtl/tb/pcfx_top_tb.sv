@@ -6,7 +6,8 @@
 
 `timescale 1us / 1ns
 
-//`define USE_IOCTL_FOR_LOAD 1
+//`define USE_IOCTL_FOR_LOAD_ROMBIOS 1
+//`define LOAD_BMP_ROM 1
 `define LOAD_SRAMS 1
 //`define SAVE_SRAMS 1
 `define VERIFY_SRAM_LOAD 1
@@ -52,9 +53,15 @@ sdram_xsds sdrb (.*);
 reg         ioctl_download = 0;
 reg [7:0]   ioctl_index;
 reg         ioctl_wr;
-reg [24:0]  ioctl_addr;
+reg [24:0]  ioctl_addr = 0;
 reg [15:0]  ioctl_dout;
 wire        ioctl_wait;
+
+logic [1:0] bk_ena_img_mount;
+logic       bk_ena;
+logic       bk_load = 0;
+logic       bk_save = 0;
+logic       bmp_eject_rom = 0;
 
 hmi_t       hmi;
 
@@ -92,9 +99,12 @@ pcfx_top pcfx_top
 	.ioctl_dout(ioctl_dout),
 	.ioctl_wait(ioctl_wait),
 
+    .bk_ena_img_mount(bk_ena_img_mount),
     .bk_ena(bk_ena),
     .bk_load(bk_load),
     .bk_save(bk_save),
+    .bmp_rom_inserted(),
+    .bmp_eject_rom(bmp_eject_rom),
 
     .HMI(hmi),
 
@@ -162,8 +172,7 @@ endtask
 //////////////////////////////////////////////////////////////////////
 
 string fn_rombios = "rombios.bin";
-
-`ifdef USE_IOCTL_FOR_LOAD
+string fn_bmp_rom = "rom.fxb";
 
 bit         ioctl_active = 0;
 integer     ioctl_fin;
@@ -196,7 +205,6 @@ logic [15:0] data;
         else begin
             ioctl_active <= 0;
             ioctl_download <= 0;
-            ioctl_addr <= 'X;
             ioctl_dout <= 'X;
             ioctl_wr <= 0;
         end
@@ -206,18 +214,27 @@ end
 task ioctl_go(input string fn);
     ioctl_fin = $fopen(fn, "rb");
     assert(ioctl_fin != 0) else $finish;
+    $display("Loading ROM %s via ioctl", fn);
     ioctl_active = '1;
     while (ioctl_active)
         @(posedge clk_sys) ;
+    @(posedge clk_sys) ;
     $fclose(ioctl_fin);
 endtask
 
+`ifdef USE_IOCTL_FOR_LOAD_ROMBIOS
 task load_rombios;
     ioctl_index = {2'd0, 6'd0};
     ioctl_go(fn_rombios);
 endtask
+`endif
 
-`else // ifndef USE_IOCTL_FOR_LOAD
+task load_bmp_rom;
+    ioctl_index = {2'd0, 6'd2};
+    ioctl_go(fn_bmp_rom);
+endtask
+
+//////////////////////////////////////////////////////////////////////
 
 task load_file(input [24:0] base, input string fn);
 integer	fin;
@@ -227,6 +244,7 @@ logic [24:0] addr;
     begin
         fin = $fopen(fn, "rb");
         assert(fin != 0) else $error("Unable to open file %s", fn);
+        $display("Loading ROM %s directly", fn);
         addr = base;
         while (!$feof(fin)) begin :load_loop
             code = $fread(data, fin, 0, 2);
@@ -240,10 +258,10 @@ logic [24:0] addr;
     end
 endtask
 
+`ifndef USE_IOCTL_FOR_LOAD_ROMBIOS
 task load_rombios;
     load_file(pcfx_top.memif_sdram.ROM_BASE_A, fn_rombios);
 endtask
-
 `endif
 
 //////////////////////////////////////////////////////////////////////
@@ -259,9 +277,6 @@ logic [15:0]    sd_buff_dout = 0;
 logic [15:0]    sd_buff_din;
 logic           sd_buff_wr = 0;
 logic           sd_buff_rd = 0;
-logic           bk_ena;
-logic           bk_load = 0;
-logic           bk_save = 0;
 
 int             sd_vd;
 int             sd_fin [2] = '{0, 0};
@@ -349,6 +364,8 @@ task mount_sd_file(string fn, int vd);
 string fnin, fnout;
 integer	fin, fout;
 integer code;
+    if (~bk_ena_img_mount[vd])
+        return;
     fnin = {fn, ".bin"};
     fnout = {fn, ".out.bin"};
     fin = $fopen(fnin, "rb");
@@ -471,7 +488,10 @@ initial #0 begin
     #10 ; // wait for sdram init.
 
     load_rombios();
-    $display("ROM loaded.");
+`ifdef LOAD_BMP_ROM
+    load_bmp_rom();
+`endif
+    $display("ROM(s) loaded.");
 
     //load_file(pcfx_top.memif_sdram.RAM_BASE_A, "ram.bin", '0);
 

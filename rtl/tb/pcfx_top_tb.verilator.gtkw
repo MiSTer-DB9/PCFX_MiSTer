@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v3.4.0 (w)1999-2022 BSI
-[*] Mon Jan 26 01:56:04 2026
+[*] Sun Feb  8 00:44:50 2026
 [*]
 [dumpfile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/pcfx_top_tb.verilator.fst"
-[dumpfile_mtime] "Mon Jan 26 01:54:33 2026"
-[dumpfile_size] 402435
+[dumpfile_mtime] "Sun Feb  8 00:44:48 2026"
+[dumpfile_size] 164147149
 [savefile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/pcfx_top_tb.verilator.gtkw"
-[timestart] 1991039
+[timestart] 0
 [size] 1334 601
 [pos] -1 -1
-*-6.959739 1991220 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+*-24.228765 43501780 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 [markername] AA
 [markername] BB
 [markername] CC
@@ -46,8 +46,15 @@
 @800200
 -pcfx_top
 @28
+pcfx_top_tb.ioctl_download
+@22
+pcfx_top_tb.ioctl_index[7:0]
+pcfx_top_tb.ioctl_addr[24:0]
+@28
 pcfx_top_tb.pcfx_top.img_mounted[1:0]
 pcfx_top_tb.pcfx_top.bk_mounted[1:0]
+pcfx_top_tb.bk_ena_img_mount[1:0]
+pcfx_top_tb.bk_load
 pcfx_top_tb.pcfx_top.bk_load
 pcfx_top_tb.pcfx_top.bk_save
 pcfx_top_tb.pcfx_top.sd_vd
@@ -71,9 +78,7 @@ pcfx_top_tb.pcfx_top.bk_sdrd_copying
 pcfx_top_tb.pcfx_top.bk_sdrd_copy_ack
 @22
 pcfx_top_tb.pcfx_top.bk_sdrd_din[31:0]
-@23
 pcfx_top_tb.pcfx_top.bk_sdrd_dout[31:0]
-@22
 pcfx_top_tb.pcfx_top.bk_sdrd_a[24:0]
 pcfx_top_tb.pcfx_top.sdbuf_a[7:0]
 pcfx_top_tb.pcfx_top.sdbuf_din[15:0]
@@ -81,6 +86,10 @@ pcfx_top_tb.pcfx_top.sdbuf_dout[15:0]
 @28
 pcfx_top_tb.pcfx_top.sdbuf_rden
 pcfx_top_tb.pcfx_top.sdbuf_wren
+pcfx_top_tb.pcfx_top.bmp_rom_inserted
+@22
+pcfx_top_tb.pcfx_top.bmp_ioctl_blk_cnt[31:0]
+pcfx_top_tb.pcfx_top.bmp_sd_blk_cnt[31:0]
 @1000200
 -pcfx_top
 @800200
@@ -133,13 +142,13 @@ pcfx_top_tb.pcfx_top.memif_sdram.wact
 pcfx_top_tb.pcfx_top.memif_sdram.mem_rdy
 @1401200
 -memif_sdram
-@c00200
+@800200
 -fx_bmp
 @28
 pcfx_top_tb.pcfx_top.bmp.CFG_EN
 @24
 pcfx_top_tb.pcfx_top.bmp.CFG_SIZE[2:0]
-@28
+@29
 pcfx_top_tb.pcfx_top.bmp.MCP_CSn
 @22
 pcfx_top_tb.pcfx_top.bmp.MCP_A[26:1]
@@ -151,7 +160,7 @@ pcfx_top_tb.pcfx_top.bmp.MCP_DO[7:0]
 pcfx_top_tb.pcfx_top.bmp.bat_sel
 pcfx_top_tb.pcfx_top.bmp.RAM_CEn
 pcfx_top_tb.pcfx_top.bmp.RAM_READYn
-@1401200
+@1000200
 -fx_bmp
 @28
 pcfx_top_tb.pcfx_top.mach.ERROR

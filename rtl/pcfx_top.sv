@@ -34,9 +34,12 @@ module pcfx_top
     input [15:0]      ioctl_dout,
     output reg        ioctl_wait = '0,
 
+    output [1:0]      bk_ena_img_mount,
     output            bk_ena,
     input             bk_load,
     input             bk_save,
+    output reg        bmp_rom_inserted = 0,
+    input             bmp_eject_rom,
 
     input             hmi_t HMI,
 
@@ -315,6 +318,7 @@ fx_bmp bmp
 reg         romwr_active = 0;
 reg         romwr_a1;
 wire        romwr_ack;
+wire        romwr_download_bmp;
 
 always @(posedge clk_sys) begin
 	reg old_download;
@@ -329,8 +333,7 @@ always @(posedge clk_sys) begin
         romwr_a1 <= 0;
         case (ioctl_index[5:0])
             6'd0, 6'd1: romwr_a <= ROM_BASE_A;
-//          6'd2:       romwr_a <= SRAM_BASE_A;
-//          6'd3:       romwr_a <= BMP_BASE_A;
+            6'd2:       romwr_a <= BMP_BASE_A;
             default: romwr_active <= 0;
         endcase
 	end
@@ -349,16 +352,34 @@ always @(posedge clk_sys) begin
 	end
 end
 
+assign romwr_download_bmp = romwr_active & ~ioctl_download &
+                            (ioctl_index[5:0] == 6'd2);
+
 //////////////////////////////////////////////////////////////////////
 // FX-BMP -> Memory Cord Port
 
-wire [31:0] bmp_sd_blk_cnt = bk_sd_blk_cnt[1];
+logic [31:0]    bmp_ioctl_blk_cnt = 0;
+logic [31:0]    bmp_sd_blk_cnt;
+logic [31:0]    bmp_blk_cnt;
 
-assign bmp_cfg_en = bk_mounted[1];
+// BMP contents can come from ioctl (ROM cart) or sd (backup RAM).
+always @(posedge clk_sys) begin
+    if (~bmp_rom_inserted & romwr_download_bmp) begin
+        bmp_rom_inserted <= '1;
+        bmp_ioctl_blk_cnt <= 32'(ioctl_addr[24:9]);
+    end
+    else if (bmp_rom_inserted & bmp_eject_rom) begin
+        bmp_rom_inserted <= '0;
+    end
+end
+
+assign bmp_blk_cnt = bmp_rom_inserted ? bmp_ioctl_blk_cnt : bk_sd_blk_cnt[1];
+
+assign bmp_cfg_en = bmp_rom_inserted | bk_mounted[1];
 
 // Configure the BMP size to match the mounted image size.
 always @* begin
-    casez ({|bmp_sd_blk_cnt[31:14], bmp_sd_blk_cnt[13:8]})
+    casez ({|bmp_blk_cnt[31:14], bmp_blk_cnt[13:8]})
         7'b1??_????:    bmp_cfg_size = 3'd6; // 8MB
         7'b01?_????:    bmp_cfg_size = 3'd5; // 4MB
         7'b001_????:    bmp_cfg_size = 3'd4; // 2MB
@@ -396,6 +417,9 @@ logic           bk_saving = 0;
 logic           sd_vd; // volume select
 
 logic           sd_ack_d;
+
+assign bk_ena_img_mount[0] = '1; // SRAM
+assign bk_ena_img_mount[1] = ~bmp_rom_inserted; // BMP
 
 always @(posedge clk_sys) begin
     if (img_mounted != 0) begin

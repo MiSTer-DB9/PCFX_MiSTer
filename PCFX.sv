@@ -212,7 +212,7 @@ assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X      XX            XX
+// X      XXX           XX
 
 `include "build_id.v" 
 localparam CONF_STR = {
@@ -220,12 +220,14 @@ localparam CONF_STR = {
 	"-;",
 	"O[22:21],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"-;",
-    "S0,SAVBIN,Mount int. backup RAM;",
-    "S1,FXBBIN,Mount FX-BMP backup RAM;",
-    "D0R7,Load backup RAM;",
-    "D0R8,Save backup RAM;",
+    "D0S0,SAVBIN,Mount int. backup RAM;",
+    "D1S1,FXBBIN,Mount FX-BMP backup RAM;",
+    "D2R7,Load backup RAM;",
+    "D2R8,Save backup RAM;",
 	"-;",
     "F1,ROMBIN,Load custom BIOS;",
+    "F2,FXB,Load FX-BMP ROM;",
+    "D3T9,Unload FX-BMP ROM;",
 	"-;",
 	"T[0],Reset;",
 	"R[0],Reset and close OSD;",
@@ -258,6 +260,9 @@ wire        ioctl_wr;
 wire [24:0] ioctl_addr;
 wire [15:0] ioctl_dout;
 wire        ioctl_wait;
+wire        bk_ena;
+wire [1:0]  bk_ena_img_mount;
+wire        bmp_rom_inserted;
 
 hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2)) hps_io
 (
@@ -270,7 +275,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2)) hps_io
 	.gamma_bus(),
 
 	.status(status),
-	.status_menumask({~bk_ena}),
+	.status_menumask({~bmp_rom_inserted, ~bk_ena, ~bk_ena_img_mount}),
 	
 	.joystick_0(joystick_0),
 	.joystick_1(joystick_1),
@@ -336,7 +341,6 @@ always @joystick_1
 
 //////////////////////////////////////////////////////////////////////
 
-wire bk_ena;
 wire error;
 wire HBlank;
 wire HSync;
@@ -372,9 +376,12 @@ pcfx_top pcfx_top
 	.ioctl_dout(ioctl_dout),
 	.ioctl_wait(ioctl_wait),
 
+    .bk_ena_img_mount(bk_ena_img_mount),
     .bk_ena(bk_ena),
     .bk_load(status[7]),
     .bk_save(status[8]),
+    .bmp_rom_inserted(bmp_rom_inserted),
+    .bmp_eject_rom(status[9]),
 
     .HMI(hmi),
 
