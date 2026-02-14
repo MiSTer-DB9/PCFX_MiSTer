@@ -57,12 +57,12 @@ module pcfx_top
 
     output            ERROR,
 
-    output reg        ce_pix,
+    output            ce_pix,
 
-	output reg        HBlank,
-	output reg        HSync,
-	output reg        VBlank,
-	output reg        VSync,
+	output            HBlank,
+	output            HSync,
+	output            VBlank,
+	output            VSync,
 
 	output [7:0]      R,
 	output [7:0]      G,
@@ -605,13 +605,32 @@ dpram #(.addr_width(8), .data_width(16)) sdbuf
 //////////////////////////////////////////////////////////////////////
 // Video output
 
-assign ce_pix = vid_pce;
-assign R = vid_u;
-assign G = vid_y;
-assign B = vid_v;
-assign HBlank = vid_hbl;
-assign VBlank = vid_vbl;
-assign HSync = ~vid_hsn;
-assign VSync = ~vid_vsn;
+wire csc_vsn, csc_hsn;
+
+yuv2rgb csc
+   (
+    .CLK(clk_sys),
+
+    .I_PCE(vid_pce),
+    .I_Y(vid_y),
+    .I_U(vid_u),
+    .I_V(vid_v),
+    .I_VSn(vid_vsn),
+    .I_HSn(vid_hsn),
+    .I_VBL(vid_vbl),
+    .I_HBL(vid_hbl),
+
+    .O_PCE(ce_pix),
+    .O_R(R),
+    .O_G(G),
+    .O_B(B),
+    .O_VSn(csc_vsn),
+    .O_HSn(csc_hsn),
+    .O_VBL(VBlank),
+    .O_HBL(HBlank)
+    );
+
+assign HSync = ~csc_hsn;
+assign VSync = ~csc_vsn;
 
 endmodule

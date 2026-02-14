@@ -18,6 +18,7 @@ dpram.sv
 ../scsi.v
 ../fake_cd.sv
 ../hmi2kp.sv
+../yuv2rgb.sv
 
 ../fifo/fifo1.v
 
