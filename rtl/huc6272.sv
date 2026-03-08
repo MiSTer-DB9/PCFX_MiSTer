@@ -1,6 +1,6 @@
-// Placeholder for HuC6272 (KING)
+// HuC6272 (KING)
 //
-// Copyright (c) 2025 David Hunter
+// Copyright (c) 2025-2026 David Hunter
 //
 // This program is GPL licensed. See COPYING for the full license.
 
@@ -10,6 +10,7 @@ module huc6272
      input         CE,
      input         RESn,
 
+     // CPU memory / I/O bus interface
      input [2:1]   A,
      input [15:0]  DI,
      output [15:0] DO,
@@ -19,6 +20,37 @@ module huc6272
      output        BUSYn,
      output        IRQn,
 
+     // DRAM bank A interface
+     input [15:0]  RA_DI,
+     output [15:0] RA_DO,
+     output [8:0]  RA_A,
+     output        RA_OEn,
+     output        RA_WEn,
+     output        RA_RASn,
+     output        RA_LCASn,
+     output        RA_UCASn,
+
+     // DRAM bank B interface
+     input [15:0]  RB_DI,
+     output [15:0] RB_DO,
+     output [8:0]  RB_A,
+     output        RB_OEn,
+     output        RB_WEn,
+     output        RB_RASn,
+     output        RB_LCASn,
+     output        RB_UCASn,
+
+     // Video interface
+     input         DCK, // pixel clock enable
+     input         DCK_NEGEDGE,
+     input         HSYNC_POSEDGE,
+     input         HSYNC_NEGEDGE,
+     input         VSYNC_POSEDGE,
+     input         VSYNC_NEGEDGE,
+     output [23:0] VD, // [7:0] = palette data / [23:0] = {Y,U,V}
+     output        VDE, // data enable (not in blanking)
+
+     // SCSI (CD-ROM) interface
      input [7:0]   SCSI_DI,
      output [7:0]  SCSI_DO,
      output        SCSI_DOE,
@@ -57,6 +89,11 @@ logic           scsi_phase_match;
 logic           scsi_reset_int;
 logic           scsi_rxbuf_rd;
 logic           scsi_int_req_act;
+
+logic [18:1]    vid_mb_a;
+logic [15:0]    vid_mb_di, vid_mb_do;
+logic [1:0]     vid_mb_be;
+logic           vid_mb_wr, vid_mb_req, vidMb_ack;
 
 //////////////////////////////////////////////////////////////////////
 // CPU memory / I/O bus interface
@@ -192,6 +229,92 @@ assign DO = (~CSn & ~RDn) ? (A[1] ? dout[31:16] : dout[15:0]) : '0;
 
 assign BUSYn = '1; // TODO
 assign IRQn = '1; // TODO
+
+//////////////////////////////////////////////////////////////////////
+// DRAM memory controllers
+
+huc6272_dmc dmca
+   (
+    .CLK(CLK),
+    .CE(CE),
+    .RESn(RESn),
+
+    .A('0),
+    .DI(),
+    .DO('0),
+    .BE('0),
+    .WR('0),
+    .REQ('0),
+    .ACK(),
+
+    .R_DI(RA_DI),
+    .R_DO(RA_DO),
+    .R_A(RA_A),
+    .R_OEn(RA_OEn),
+    .R_WEn(RA_WEn),
+    .R_RASn(RA_RASn),
+    .R_LCASn(RA_LCASn),
+    .R_UCASn(RA_UCASn)
+    );
+
+huc6272_dmc dmcb
+   (
+    .CLK(CLK),
+    .CE(CE),
+    .RESn(RESn),
+
+    .A(vid_mb_a),
+    .DI(vid_mb_di),
+    .DO(vid_mb_do),
+    .BE(vid_mb_be),
+    .WR(vid_mb_wr),
+    .REQ(vid_mb_req),
+    .ACK(vid_mb_ack),
+
+    .R_DI(RB_DI),
+    .R_DO(RB_DO),
+    .R_A(RB_A),
+    .R_OEn(RB_OEn),
+    .R_WEn(RB_WEn),
+    .R_RASn(RB_RASn),
+    .R_LCASn(RB_LCASn),
+    .R_UCASn(RB_UCASn)
+    );
+
+//////////////////////////////////////////////////////////////////////
+// Video interface
+
+huc6272_video video
+   (
+    .CLK(CLK),
+    .CE(CE),
+    .RESn(RESn),
+
+    .MA_A(),
+    .MA_DI('0),
+    .MA_DO(),
+    .MA_BE(),
+    .MA_WR(),
+    .MA_REQ(),
+    .MA_ACK(),
+
+    .MB_A(vid_mb_a),
+    .MB_DI(vid_mb_di),
+    .MB_DO(vid_mb_do),
+    .MB_BE(vid_mb_be),
+    .MB_WR(vid_mb_wr),
+    .MB_REQ(vid_mb_req),
+    .MB_ACK(vid_mb_ack),
+
+    .DCK(DCK),
+    .DCK_NEGEDGE(DCK_NEGEDGE),
+    .HSYNC_POSEDGE(HSYNC_POSEDGE),
+    .HSYNC_NEGEDGE(HSYNC_NEGEDGE),
+    .VSYNC_POSEDGE(VSYNC_POSEDGE),
+    .VSYNC_NEGEDGE(VSYNC_NEGEDGE),
+    .VD(VD),
+    .VDE(VDE)
+    );
 
 //////////////////////////////////////////////////////////////////////
 // SCSI interface

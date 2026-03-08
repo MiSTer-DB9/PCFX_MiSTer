@@ -127,7 +127,7 @@ logic           ga_csn;
 logic [15:0]    ga_do;
 logic           vdc_cpu_ce;
 
-logic           pce, pce_negedge;
+logic           dck70, dck70_negedge;
 logic           hs_posedge, hs_negedge;
 logic           vs_posedge, vs_negedge;
 
@@ -256,8 +256,8 @@ huc6261 vce
      .DI(cpu_d_o[15:0]),
      .DO(vce_do),
 
-     .PCE(pce),
-     .PCE_NEGEDGE(pce_negedge),
+     .DCK70(dck70),
+     .DCK70_NEGEDGE(dck70_negedge),
      .HSYNC_POSEDGE(hs_posedge),
      .HSYNC_NEGEDGE(hs_negedge),
      .VSYNC_POSEDGE(vs_posedge),
@@ -292,8 +292,8 @@ huc6270 vdc0
      .BUSY_N(vdc0_busyn),
      .IRQ_N(vdc0_irqn),
 
-     .DCK_CE(pce),
-     .DCK_CE_F(pce_negedge),
+     .DCK_CE(dck70),
+     .DCK_CE_F(dck70_negedge),
      .HSYNC_F(hs_negedge),
      .HSYNC_R(hs_posedge),
      .VSYNC_F(vs_negedge),
@@ -346,8 +346,8 @@ huc6270 vdc1
      .BUSY_N(vdc1_busyn),
      .IRQ_N(vdc1_irqn),
 
-     .DCK_CE(pce),
-     .DCK_CE_F(pce_negedge),
+     .DCK_CE(dck70),
+     .DCK_CE_F(dck70_negedge),
      .HSYNC_F(hs_negedge),
      .HSYNC_R(hs_posedge),
      .VSYNC_F(vs_negedge),
@@ -552,7 +552,7 @@ hmi2kp hmi2kp
 //////////////////////////////////////////////////////////////////////
 
 assign A = cpu_a;
-assign VID_PCE = pce;
+assign VID_PCE = dck70;
 
 //////////////////////////////////////////////////////////////////////
 

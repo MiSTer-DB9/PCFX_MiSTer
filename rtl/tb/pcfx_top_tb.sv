@@ -28,7 +28,7 @@ initial begin
     $dumpvars();
 `else
     $dumpfile("pcfx_top_tb.verilator.fst");
-    #(3500e3) $dumpvars();
+    $dumpvars();
 `endif
 end
 
@@ -455,7 +455,7 @@ always @(negedge vs) begin
   $display("%t: Frame %03d  A=%x", $time, frame, pcfx_top.mach.cpu_a);
   $sformat(fname, "frames/render-%03d", frame);
   pice = 0;
-  if (frame >= 220) begin
+  if (frame >= 0) begin
     fpic = $fopen({fname, ".hex"}, "w");
   end
   frame = frame + 1;
@@ -530,7 +530,7 @@ initial begin
     $finish;
 end
 
-initial if (1) begin
+initial if (0) begin
     @(running) ;
     #(216e3);
 

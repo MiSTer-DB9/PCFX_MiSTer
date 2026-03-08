@@ -11,36 +11,41 @@
 
 module huc6261
     (
-     input         CLK,
-     input         CE,
-     input         RESn,
+     input            CLK,
+     input            CE,
+     input            RESn,
 
-     input         CSn,
-     input         WRn,
-     input         RDn,
-     input         A2,
-     input [15:0]  DI,
-     output [15:0] DO,
+     input            CSn,
+     input            WRn,
+     input            RDn,
+     input            A2,
+     input [15:0]     DI,
+     output [15:0]    DO,
 
      // VDC interface
-     output        PCE, // pixel clock enable
-     output        PCE_NEGEDGE,
-     output reg    HSYNC_POSEDGE,
-     output reg    HSYNC_NEGEDGE,
-     output reg    VSYNC_POSEDGE,
-     output reg    VSYNC_NEGEDGE,
+     output           DCK70, // pixel clock enable
+     output           DCK70_NEGEDGE,
+     output reg       HSYNC_POSEDGE,
+     output reg       HSYNC_NEGEDGE,
+     output reg       VSYNC_POSEDGE,
+     output reg       VSYNC_NEGEDGE,
 
-     input [8:0]   VDC0_VD,
-     input [8:0]   VDC1_VD,
+     input [8:0]      VDC0_VD,
+     input [8:0]      VDC1_VD,
+
+     // MMC (HuC6272 KING) video interface
+     output           DCKKR, // pixel clock enable
+     output           DCKKR_NEGEDGE,
+     input [23:0]     MMC_VD,
 
      // NTSC/YUV video output
      output reg [7:0] Y,
      output reg [7:0] U,
      output reg [7:0] V,
-     output reg    VSn,
-     output reg    HSn,
-     output reg    VBL,
-     output reg    HBL
+     output reg       VSn,
+     output reg       HSn,
+     output reg       VBL,
+     output reg       HBL
      );
 
 localparam [11:0] LEFT_BL_CLOCKS = 12'd456;
@@ -198,37 +203,71 @@ always @(posedge CLK) begin
 end
 
 //////////////////////////////////////////////////////////////////////
-// Pixel clock generator
+// VDC (HuC6270) Pixel clock generator
+//
+// Variable rate for 256 or 320 horizontal pixels
 
-logic [2:0]     clken_cnt;
-logic           clken, clken_ne;
+logic [2:0]     cken70_cnt;
+logic           cken70, cken70_ne;
 
 always @(posedge CLK) begin
-    clken <= '0;
-    clken_ne <= '0;
+    cken70 <= '0;
+    cken70_ne <= '0;
 
     if (~RESn) begin
-        clken_cnt <= '0;
+        cken70_cnt <= '0;
     end
     else begin
-        clken_cnt <= clken_cnt + 1'd1;
+        cken70_cnt <= cken70_cnt + 1'd1;
 
-        if ((((multires & (clken_cnt == 3'd3))
-              | (cr.dc7 == 1'b0 & ((clken_cnt == 3'd7))))
+        if ((((multires & (cken70_cnt == 3'd3))
+              | (cr.dc7 == 1'b0 & ((cken70_cnt == 3'd7))))
              & (h_cnt < (LINE_CLOCKS - 12'(2+1))))
-            | (cr.dc7 == 1'b1 & (clken_cnt == 3'd5))
+            | (cr.dc7 == 1'b1 & (cken70_cnt == 3'd5))
             | h_wrap) begin
-            clken_cnt <= '0;
-            clken <= '1;
+            cken70_cnt <= '0;
+            cken70 <= '1;
         end
-        if (((cr.dc7 == 1'b0) & (clken_cnt == 3'd3))
-            | ((cr.dc7 == 1'b1) & (clken_cnt == 3'd2)))
-            clken_ne <= '1;
+        if (((cr.dc7 == 1'b0) & (cken70_cnt == 3'd3))
+            | ((cr.dc7 == 1'b1) & (cken70_cnt == 3'd2)))
+            cken70_ne <= '1;
     end
 end
 
-assign PCE = clken;
-assign PCE_NEGEDGE = clken_ne;
+assign DCK70 = cken70;
+assign DCK70_NEGEDGE = cken70_ne;
+
+//////////////////////////////////////////////////////////////////////
+// VPU (HuC6271 RAINBOW) / MMC (HuC6272 KING) Pixel clock generator
+//
+// Fixed rate for 256 horizontal pixels
+
+logic [2:0]     ckenkr_cnt;
+logic           ckenkr, ckenkr_ne;
+
+always @(posedge CLK) begin
+    ckenkr <= '0;
+    ckenkr_ne <= '0;
+
+    if (~RESn) begin
+        ckenkr_cnt <= '0;
+    end
+    else begin
+        ckenkr_cnt <= ckenkr_cnt + 1'd1;
+
+        if (((ckenkr_cnt == 3'd7)
+             & (h_cnt < (LINE_CLOCKS - 12'(2+1))))
+            | h_wrap) begin
+            ckenkr_cnt <= '0;
+            ckenkr <= '1;
+        end
+        if (ckenkr_cnt == 3'd3)
+            ckenkr_ne <= '1;
+    end
+end
+
+assign DCKKR = ckenkr;
+assign DCKKR_NEGEDGE = ckenkr_ne;
 
 //////////////////////////////////////////////////////////////////////
 // Video mixer
@@ -328,7 +367,7 @@ end
 //////////////////////////////////////////////////////////////////////
 // Final output
 
-always @(posedge CLK) if (PCE) begin
+always @(posedge CLK) if (DCK70) begin
     VBL <= vbl_ff;
     HBL <= hbl_ff;
 
