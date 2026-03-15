@@ -10,6 +10,9 @@ module huc6272_video
     input         CE,
     input         RESn,
 
+    // Register file
+    input         rf_bgm_t rf_bgm,
+
     // Bank A memory client interface
     output [18:1] MA_A,
     input [15:0]  MA_DI,
@@ -129,61 +132,33 @@ assign MB_REQ = mbreq | mbtrg;
 //////////////////////////////////////////////////////////////////////
 // BG pipelines
 
-logic               cgfce;
-logic [15:0]        cgrd_in;
-logic [31:0]        cgrd;
-logic               cgra;
-logic [23:0]        cgpd, cgpdo; // {Y,U,V}
-logic               cgpdeo;
+logic [23:0]        bg0_pd;
+logic               bg0_pde;
 
-wire cgrce = DCK;
+huc6272_bgm #(0) bg0
+   (
+    .CLK(CLK),
+    .CE(CE),
+    .RESn(RESn),
 
-always @(posedge CLK)
-    cgfce <= mback;
+    .rf_bgm(rf_bgm),
 
-always @(posedge CLK) begin
-    if (~RESn) begin
-        cgra <= '0;
-        cgrd <= '0;
-        cgrd_in <= '0;
-    end
-    else if (cgfce) begin
-        cgra <= mba_d[1];
-        cgrd_in <= mbd;
-        if (1'b1/*16M*/) begin
-            if (mba_d[1])
-                cgrd <= {cgrd_in, mbd};
-        end
-        else
-            cgrd <= {16'b0, cgrd_in};
-    end
-end
+    .DCK(DCK),
+    .RENDER(render),
+    .RENDER_BG_COL(render_bg_col),
 
-always @* begin
-    if (1'b1/*16M*/) begin
-        // 16M CG is ordered in KRAM as {Y0,Y1,U,V}.
-        cgpd[16+:8] = ~render_bg_col[0] ? cgrd[24+:8] : cgrd[16+:8];
-        cgpd[0+:16] = cgrd[0+:16];
-    end
-    if (~render)
-        cgpd = '0;
-end
+    .MBA1(mba_d[1]),
+    .MBD(mbd),
+    .MBACK(mback),
 
-always @(posedge CLK) begin
-    if (~RESn) begin
-        cgpdo <= '0;
-        cgpdeo <= '0;
-    end
-    else if (cgrce) begin
-        cgpdo <= cgpd;
-        cgpdeo <= render;
-    end
-end
+    .PD(bg0_pd),
+    .PDE(bg0_pde)
+    );
 
 //////////////////////////////////////////////////////////////////////
 // Final video output
 
-assign VD = cgpdo;
-assign VDE = cgpdeo;
+assign VD = bg0_pd;
+assign VDE = bg0_pde;
 
 endmodule

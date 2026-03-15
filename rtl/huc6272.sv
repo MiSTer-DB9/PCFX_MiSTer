@@ -4,6 +4,8 @@
 //
 // This program is GPL licensed. See COPYING for the full license.
 
+`include "huc6272_types.svh"
+
 module huc6272
     (
      input         CLK,
@@ -90,6 +92,13 @@ logic           scsi_reset_int;
 logic           scsi_rxbuf_rd;
 logic           scsi_int_req_act;
 
+rf_bgm_t        rf_bgm;
+
+logic [3:0]     mpa;
+logic [8:0]     mpd;
+logic           mpwr_pend, mpwr;
+logic           mpsw;
+
 logic [18:1]    vid_mb_a;
 logic [15:0]    vid_mb_di, vid_mb_do;
 logic [1:0]     vid_mb_be;
@@ -115,6 +124,9 @@ always @(posedge CLK) if (CE) begin
         scsi_assert_msg <= '0;
         scsi_txbuf <= '0;
         scsi_dma_mode <= '0;
+        rf_bgm <= '0;
+        mpwr_pend <= '0;
+        mpwr <= '0;
     end
     else begin
         if (~CSn & ~WRn) begin
@@ -143,6 +155,64 @@ always @(posedge CLK) if (CE) begin
                         end
                         7'h05: scsi_start_dma_tx <= '1;
                         7'h07: scsi_start_dma_rx <= '1;
+                        7'h10: begin
+                            rf_bgm.bgp[0].format <= DI[00+:4];
+                            rf_bgm.bgp[1].format <= DI[04+:4];
+                            rf_bgm.bgp[2].format <= DI[08+:4];
+                            rf_bgm.bgp[3].format <= DI[12+:4];
+                        end
+                        7'h12: begin
+                            rf_bgm.bgp[0].prio <= DI[0+:3];
+                            rf_bgm.bgp[1].prio <= DI[3+:3];
+                            rf_bgm.bgp[2].prio <= DI[6+:3];
+                            rf_bgm.bgp[3].prio <= DI[9+:3];
+                            rf_bgm.rsw <= DI[12];
+                        end
+                        7'h13: begin
+                            mpa <= DI[3:0];
+                        end
+                        7'h14: begin
+                            mpd <= DI[8:0];
+                            mpwr_pend <= '1;
+                        end
+                        7'h15: mpsw <= DI[0];
+                        7'h16: rf_bgm.sub_wrap <= DI[3:0];
+                        7'h20: rf_bgm.bgp[0].bat <= DI[7:0];
+                        7'h21: rf_bgm.bgp[0].cg <= DI[7:0];
+                        7'h22: rf_bgm.sub_bat0 <= DI[7:0];
+                        7'h23: rf_bgm.sub_cg0 <= DI[7:0];
+                        7'h24: rf_bgm.bgp[1].bat <= DI[7:0];
+                        7'h25: rf_bgm.bgp[1].cg <= DI[7:0];
+                        7'h28: rf_bgm.bgp[2].bat <= DI[7:0];
+                        7'h29: rf_bgm.bgp[2].cg <= DI[7:0];
+                        7'h2a: rf_bgm.bgp[3].bat <= DI[7:0];
+                        7'h2b: rf_bgm.bgp[3].cg <= DI[7:0];
+                        7'h2c: begin
+                            rf_bgm.bgp[0].size_m <= DI[0+:4];
+                            rf_bgm.bgp[0].size_n <= DI[4+:4];
+                            rf_bgm.size_sub_m0 <= DI[8+:4];
+                            rf_bgm.size_sub_n0 <= DI[12+:4];
+                        end
+                        7'h2d: begin
+                            rf_bgm.bgp[1].size_m <= DI[0+:4];
+                            rf_bgm.bgp[1].size_n <= DI[4+:4];
+                        end
+                        7'h2e: begin
+                            rf_bgm.bgp[2].size_m <= DI[0+:4];
+                            rf_bgm.bgp[2].size_n <= DI[4+:4];
+                        end
+                        7'h2f: begin
+                            rf_bgm.bgp[3].size_m <= DI[0+:4];
+                            rf_bgm.bgp[3].size_n <= DI[4+:4];
+                        end
+                        7'h30: rf_bgm.bgp[0].bsx <= DI[10:0];
+                        7'h31: rf_bgm.bgp[0].bsy <= DI[10:0];
+                        7'h32: rf_bgm.bgp[1].bsx <= {1'b0, DI[9:0]};
+                        7'h33: rf_bgm.bgp[1].bsy <= {1'b0, DI[9:0]};
+                        7'h34: rf_bgm.bgp[2].bsx <= {1'b0, DI[9:0]};
+                        7'h35: rf_bgm.bgp[2].bsy <= {1'b0, DI[9:0]};
+                        7'h36: rf_bgm.bgp[3].bsx <= {1'b0, DI[9:0]};
+                        7'h37: rf_bgm.bgp[3].bsy <= {1'b0, DI[9:0]};
                         default: ;
                     endcase
                 end
@@ -153,6 +223,16 @@ always @(posedge CLK) if (CE) begin
                     endcase
                 end
             endcase
+        end
+        else begin
+            if (mpwr_pend) begin
+                mpwr_pend <= '0;
+                mpwr <= '1;
+            end
+            else if (mpwr) begin
+                mpwr <= '0;
+                mpa <= mpa + 1'd1;
+            end
         end
     end
 end
@@ -290,6 +370,8 @@ huc6272_video video
     .CE(CE),
     .RESn(RESn),
 
+    .rf_bgm(rf_bgm),
+
     .MA_A(),
     .MA_DI('0),
     .MA_DO(),
@@ -390,3 +472,7 @@ assign SCSI_SELn = ~scsi_assert_sel;
 assign scsi_din = SCSI_DI;
 
 endmodule
+
+`include "huc6272_dmc.sv"
+`include "huc6272_video.sv"
+`include "huc6272_bgm.sv"
