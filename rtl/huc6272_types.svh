@@ -29,9 +29,22 @@ typedef struct packed {
 } rf_bgp_t;
 
 typedef struct packed {
+    logic [3:0]     mpwa;
+    logic [8:0]     mpwd;
+    logic           mpwr;
+    logic           mpsw;
     rf_bgp_t [4]    bgp;
     logic           rsw;
     logic           sub_wrap;
     logic [7:0]     sub_bat0, sub_cg0;
     logic [3:0]     size_sub_m0, size_sub_n0;
 } rf_bgm_t;
+
+typedef struct packed {
+    logic           nop;
+    logic [1:0]     layer;
+    logic           rotate;
+    logic           bat; // BAT / -CG
+    logic           ext; // EXT / -INT
+    logic [2:0]     cgoff; // CG offset
+} mpd_t;

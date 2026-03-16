@@ -94,15 +94,16 @@ logic           scsi_int_req_act;
 
 rf_bgm_t        rf_bgm;
 
-logic [3:0]     mpa;
-logic [8:0]     mpd;
-logic           mpwr_pend, mpwr;
-logic           mpsw;
+logic           mpwr_pend;
 
+logic [18:1]    vid_ma_a;
+logic [15:0]    vid_ma_di, vid_ma_do;
+logic [1:0]     vid_ma_be;
+logic           vid_ma_wr, vid_ma_req, vid_ma_ack;
 logic [18:1]    vid_mb_a;
 logic [15:0]    vid_mb_di, vid_mb_do;
 logic [1:0]     vid_mb_be;
-logic           vid_mb_wr, vid_mb_req, vidMb_ack;
+logic           vid_mb_wr, vid_mb_req, vid_mb_ack;
 
 //////////////////////////////////////////////////////////////////////
 // CPU memory / I/O bus interface
@@ -126,7 +127,6 @@ always @(posedge CLK) if (CE) begin
         scsi_dma_mode <= '0;
         rf_bgm <= '0;
         mpwr_pend <= '0;
-        mpwr <= '0;
     end
     else begin
         if (~CSn & ~WRn) begin
@@ -169,13 +169,13 @@ always @(posedge CLK) if (CE) begin
                             rf_bgm.rsw <= DI[12];
                         end
                         7'h13: begin
-                            mpa <= DI[3:0];
+                            rf_bgm.mpwa <= DI[3:0];
                         end
                         7'h14: begin
-                            mpd <= DI[8:0];
+                            rf_bgm.mpwd <= DI[8:0];
                             mpwr_pend <= '1;
                         end
-                        7'h15: mpsw <= DI[0];
+                        7'h15: rf_bgm.mpsw <= DI[0];
                         7'h16: rf_bgm.sub_wrap <= DI[3:0];
                         7'h20: rf_bgm.bgp[0].bat <= DI[7:0];
                         7'h21: rf_bgm.bgp[0].cg <= DI[7:0];
@@ -227,11 +227,11 @@ always @(posedge CLK) if (CE) begin
         else begin
             if (mpwr_pend) begin
                 mpwr_pend <= '0;
-                mpwr <= '1;
+                rf_bgm.mpwr <= '1;
             end
-            else if (mpwr) begin
-                mpwr <= '0;
-                mpa <= mpa + 1'd1;
+            else if (rf_bgm.mpwr) begin
+                rf_bgm.mpwr <= '0;
+                rf_bgm.mpwa <= rf_bgm.mpwa + 1'd1;
             end
         end
     end
@@ -319,13 +319,13 @@ huc6272_dmc dmca
     .CE(CE),
     .RESn(RESn),
 
-    .A('0),
-    .DI(),
-    .DO('0),
-    .BE('0),
-    .WR('0),
-    .REQ('0),
-    .ACK(),
+    .A(vid_ma_a),
+    .DI(vid_ma_di),
+    .DO(vid_ma_do),
+    .BE(vid_ma_be),
+    .WR(vid_ma_wr),
+    .REQ(vid_ma_req),
+    .ACK(vid_ma_ack),
 
     .R_DI(RA_DI),
     .R_DO(RA_DO),
@@ -372,13 +372,13 @@ huc6272_video video
 
     .rf_bgm(rf_bgm),
 
-    .MA_A(),
-    .MA_DI('0),
-    .MA_DO(),
-    .MA_BE(),
-    .MA_WR(),
-    .MA_REQ(),
-    .MA_ACK(),
+    .MA_A(vid_ma_a),
+    .MA_DI(vid_ma_di),
+    .MA_DO(vid_ma_do),
+    .MA_BE(vid_ma_be),
+    .MA_WR(vid_ma_wr),
+    .MA_REQ(vid_ma_req),
+    .MA_ACK(vid_ma_ack),
 
     .MB_A(vid_mb_a),
     .MB_DI(vid_mb_di),
@@ -475,4 +475,5 @@ endmodule
 
 `include "huc6272_dmc.sv"
 `include "huc6272_video.sv"
+`include "huc6272_fetch.sv"
 `include "huc6272_bgm.sv"

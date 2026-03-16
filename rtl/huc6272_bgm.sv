@@ -14,21 +14,34 @@ module huc6272_bgm
     // Register file
     input         rf_bgm_t rf_bgm,
 
+    // Render control interface
     input         DCK,
+    input         FETCH,
     input         RENDER,
     input [9:0]   RENDER_BG_COL,
 
-    input         MBA1,
-    input [15:0]  MBD,
-    input         MBACK,
-    
+    input         MDSA,
+    input [1:0]   MDLA,
+    input [15:0]  MDA,
+    input         MDSB,
+    input [1:0]   MDLB,
+    input [15:0]  MDB,
+
     output [23:0] PD,
     output        PDE
     );
 
+wire cgbank = rf_bgm.bgp[LAYER].cg[7];
 wire format_clr_16m = ((rf_bgm.bgp[LAYER].format == BGF_INT_DOT_16M) |
                        (rf_bgm.bgp[LAYER].format == BGF_EXT_BLK_16M) |
                        (rf_bgm.bgp[LAYER].format == BGF_EXT_DOT_16M));
+
+logic               mds;
+logic [15:0]        md;
+
+assign mds = cgbank ? MDSB : MDSA;
+assign mdl = cgbank ? MDLB : MDLA;
+assign md = cgbank ? MDB : MDA;
 
 logic               cgfce;
 logic [15:0]        cgrd_in;
@@ -40,7 +53,7 @@ logic               cgpdeo;
 wire cgrce = DCK;
 
 always @(posedge CLK)
-    cgfce <= MBACK;
+    cgfce <= mds & (mdl == LAYER);
 
 always @(posedge CLK) begin
     if (~RESn) begin
@@ -49,14 +62,17 @@ always @(posedge CLK) begin
         cgrd_in <= '0;
     end
     else if (cgfce) begin
-        cgra <= MBA1;
-        cgrd_in <= MBD;
+        cgra <= ~cgra;
+        cgrd_in <= md;
         if (format_clr_16m) begin
-            if (MBA1)
-                cgrd <= {cgrd_in, MBD};
+            if (cgra)
+                cgrd <= {cgrd_in, md};
         end
         else
             cgrd <= {16'b0, cgrd_in};
+    end
+    else if (~(FETCH | RENDER)) begin
+        cgra <= '0;
     end
 end
 
