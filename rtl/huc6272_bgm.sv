@@ -37,6 +37,7 @@ wire format_clr_16m = ((rf_bgm.bgp[LAYER].format == BGF_INT_DOT_16M) |
                        (rf_bgm.bgp[LAYER].format == BGF_EXT_DOT_16M));
 
 logic               mds;
+logic [1:0]         mdl;
 logic [15:0]        md;
 
 assign mds = cgbank ? MDSB : MDSA;
@@ -77,13 +78,14 @@ always @(posedge CLK) begin
 end
 
 always @* begin
-    if (format_clr_16m) begin
-        // 16M CG is ordered in KRAM as {Y0,Y1,U,V}.
-        cgpd[16+:8] = ~RENDER_BG_COL[0] ? cgrd[24+:8] : cgrd[16+:8];
-        cgpd[0+:16] = cgrd[0+:16];
+    cgpd = '0;
+    if (RENDER) begin
+        if (format_clr_16m) begin
+            // 16M CG is ordered in KRAM as {Y0,Y1,U,V}.
+            cgpd[16+:8] = ~RENDER_BG_COL[0] ? cgrd[24+:8] : cgrd[16+:8];
+            cgpd[0+:16] = cgrd[0+:16];
+        end
     end
-    if (~RENDER)
-        cgpd = '0;
 end
 
 always @(posedge CLK) begin

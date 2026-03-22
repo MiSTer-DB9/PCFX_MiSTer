@@ -11,7 +11,7 @@ module huc6272_dmc
     input         RESn,
 
     // Client interface
-    input [18:1]  A,
+    input [17:1]  A,
     output [15:0] DI,
     input [15:0]  DO,
     input [1:0]   BE, // Byte Enable
@@ -54,7 +54,7 @@ end
 
 always @(posedge CLK) begin
     if (~rract & rrtrg)
-        ra <= A;
+        ra <= {1'b0, A};
 end
 
 always @(posedge CLK) begin

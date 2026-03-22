@@ -23,7 +23,7 @@ module huc6272_fetch
     input         mpd_t MPRBUF,
 
     // Memory client interface
-    output [18:1] M_A,
+    output [17:1] M_A,
     input [15:0]  M_DI,
     output [15:0] M_DO,
     output [1:0]  M_BE,
@@ -37,21 +37,32 @@ module huc6272_fetch
     output [15:0] MD
     );
 
+function rf_bgp_t get_bgp(input [1:0] layer);
+    case (layer)
+        2'd0: get_bgp = rf_bgm.bgp[0];
+        2'd1: get_bgp = rf_bgm.bgp[1];
+        2'd2: get_bgp = rf_bgm.bgp[2];
+        2'd3: get_bgp = rf_bgm.bgp[3];
+        default: get_bgp = 'X;
+    endcase
+endfunction
+
 //////////////////////////////////////////////////////////////////////
 // Microprogram engine
 
 mpd_t               mpe_d;
-logic [18:1]        mpe_ra;
+logic [17:1]        mpe_ra;
 logic               mpe_ren;
 logic [1:0]         mpe_layer;
 
 assign mpe_d = FETCH ? MPRBUF : 9'h100;
 
-function [18:1] mpe_addr(mpd_t mpd);
+function [17:1] mpe_addr(mpd_t mpd);
 logic [7:0] base;
 rf_bgp_t bgp;
     bgp = get_bgp(mpd.layer);
     mpe_addr = '0;
+    // TODO: mpe_addr[17] = REG.0F[4];
     if (~mpd.nop) begin
         mpe_addr[16:10] = mpd.bat ? bgp.bat[6:0] : bgp.cg[6:0]; // [7] is A/-B
         if (mpd.bat)
@@ -72,7 +83,7 @@ end
 
 logic               mtrg, mreq, mack;
 logic [1:0]         mdl;
-logic [18:1]        ma, ma_d;
+logic [17:1]        ma, ma_d;
 logic [15:0]        md;
 
 assign ma = mpe_ra;

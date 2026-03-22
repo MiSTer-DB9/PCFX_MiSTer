@@ -67,40 +67,16 @@ module huc6272
      input         SCSI_IOn
      );
 
-logic [6:0]     rsel;
-
-logic [31:0]    dout;
-
-logic [7:0]     scsi_cur_bus_stat;
-logic [7:0]     scsi_din, scsi_dout, scsi_rxbuf, scsi_txbuf;
-
-logic           scsi_assert_rst;
-logic           scsi_assert_ack;
-logic           scsi_assert_sel;
-logic           scsi_assert_atn;
-logic           scsi_assert_data;
-logic           scsi_assert_io;
-logic           scsi_assert_cd;
-logic           scsi_assert_msg;
-
-logic           scsi_dma_mode;
-logic           scsi_start_dma_rx, scsi_start_dma_tx;
-logic           scsi_dma_req, scsi_dma_req_set, scsi_dma_req_clr;
-logic           scsi_phase_match;
-
-logic           scsi_reset_int;
-logic           scsi_rxbuf_rd;
-logic           scsi_int_req_act;
-
+rf_scsi_t       rf_scsi;
 rf_bgm_t        rf_bgm;
 
-logic           mpwr_pend;
+st_scsi_t       st_scsi;
 
-logic [18:1]    vid_ma_a;
+logic [17:1]    vid_ma_a;
 logic [15:0]    vid_ma_di, vid_ma_do;
 logic [1:0]     vid_ma_be;
 logic           vid_ma_wr, vid_ma_req, vid_ma_ack;
-logic [18:1]    vid_mb_a;
+logic [17:1]    vid_mb_a;
 logic [15:0]    vid_mb_di, vid_mb_do;
 logic [1:0]     vid_mb_be;
 logic           vid_mb_wr, vid_mb_req, vid_mb_ack;
@@ -108,216 +84,17 @@ logic           vid_mb_wr, vid_mb_req, vid_mb_ack;
 //////////////////////////////////////////////////////////////////////
 // CPU memory / I/O bus interface
 
-always @(posedge CLK) if (CE) begin
-    scsi_start_dma_tx <= '0;
-    scsi_start_dma_rx <= '0;
-
-    if (~RESn) begin
-        rsel <= '0;
-        scsi_dout <= '0;
-        scsi_assert_rst <= '0;
-        scsi_assert_ack <= '0;
-        scsi_assert_sel <= '0;
-        scsi_assert_atn <= '0;
-        scsi_assert_data <= '0;
-        scsi_assert_io <= '0;
-        scsi_assert_cd <= '0;
-        scsi_assert_msg <= '0;
-        scsi_txbuf <= '0;
-        scsi_dma_mode <= '0;
-        rf_bgm <= '0;
-        mpwr_pend <= '0;
-    end
-    else begin
-        if (~CSn & ~WRn) begin
-            case (A[2:1])
-                2'b00: begin
-                    rsel <= DI[6:0];
-                end
-                2'b01: ;
-                2'b10: begin
-                    case (rsel)
-                        7'h00: scsi_dout <= DI[7:0];
-                        7'h01: begin
-                            scsi_assert_rst <= DI[7];
-                            scsi_assert_ack <= DI[4];
-                            scsi_assert_sel <= DI[2];
-                            scsi_assert_atn <= DI[1];
-                            scsi_assert_data <= DI[0];
-                        end
-                        7'h02: begin
-                            scsi_dma_mode <= DI[1];
-                        end
-                        7'h03: begin
-                            scsi_assert_msg <= DI[2];
-                            scsi_assert_cd <= DI[1];
-                            scsi_assert_io <= DI[0];
-                        end
-                        7'h05: scsi_start_dma_tx <= '1;
-                        7'h07: scsi_start_dma_rx <= '1;
-                        7'h10: begin
-                            rf_bgm.bgp[0].format <= DI[00+:4];
-                            rf_bgm.bgp[1].format <= DI[04+:4];
-                            rf_bgm.bgp[2].format <= DI[08+:4];
-                            rf_bgm.bgp[3].format <= DI[12+:4];
-                        end
-                        7'h12: begin
-                            rf_bgm.bgp[0].prio <= DI[0+:3];
-                            rf_bgm.bgp[1].prio <= DI[3+:3];
-                            rf_bgm.bgp[2].prio <= DI[6+:3];
-                            rf_bgm.bgp[3].prio <= DI[9+:3];
-                            rf_bgm.rsw <= DI[12];
-                        end
-                        7'h13: begin
-                            rf_bgm.mpwa <= DI[3:0];
-                        end
-                        7'h14: begin
-                            rf_bgm.mpwd <= DI[8:0];
-                            mpwr_pend <= '1;
-                        end
-                        7'h15: rf_bgm.mpsw <= DI[0];
-                        7'h16: rf_bgm.sub_wrap <= DI[3:0];
-                        7'h20: rf_bgm.bgp[0].bat <= DI[7:0];
-                        7'h21: rf_bgm.bgp[0].cg <= DI[7:0];
-                        7'h22: rf_bgm.sub_bat0 <= DI[7:0];
-                        7'h23: rf_bgm.sub_cg0 <= DI[7:0];
-                        7'h24: rf_bgm.bgp[1].bat <= DI[7:0];
-                        7'h25: rf_bgm.bgp[1].cg <= DI[7:0];
-                        7'h28: rf_bgm.bgp[2].bat <= DI[7:0];
-                        7'h29: rf_bgm.bgp[2].cg <= DI[7:0];
-                        7'h2a: rf_bgm.bgp[3].bat <= DI[7:0];
-                        7'h2b: rf_bgm.bgp[3].cg <= DI[7:0];
-                        7'h2c: begin
-                            rf_bgm.bgp[0].size_m <= DI[0+:4];
-                            rf_bgm.bgp[0].size_n <= DI[4+:4];
-                            rf_bgm.size_sub_m0 <= DI[8+:4];
-                            rf_bgm.size_sub_n0 <= DI[12+:4];
-                        end
-                        7'h2d: begin
-                            rf_bgm.bgp[1].size_m <= DI[0+:4];
-                            rf_bgm.bgp[1].size_n <= DI[4+:4];
-                        end
-                        7'h2e: begin
-                            rf_bgm.bgp[2].size_m <= DI[0+:4];
-                            rf_bgm.bgp[2].size_n <= DI[4+:4];
-                        end
-                        7'h2f: begin
-                            rf_bgm.bgp[3].size_m <= DI[0+:4];
-                            rf_bgm.bgp[3].size_n <= DI[4+:4];
-                        end
-                        7'h30: rf_bgm.bgp[0].bsx <= DI[10:0];
-                        7'h31: rf_bgm.bgp[0].bsy <= DI[10:0];
-                        7'h32: rf_bgm.bgp[1].bsx <= {1'b0, DI[9:0]};
-                        7'h33: rf_bgm.bgp[1].bsy <= {1'b0, DI[9:0]};
-                        7'h34: rf_bgm.bgp[2].bsx <= {1'b0, DI[9:0]};
-                        7'h35: rf_bgm.bgp[2].bsy <= {1'b0, DI[9:0]};
-                        7'h36: rf_bgm.bgp[3].bsx <= {1'b0, DI[9:0]};
-                        7'h37: rf_bgm.bgp[3].bsy <= {1'b0, DI[9:0]};
-                        default: ;
-                    endcase
-                end
-                2'b11: begin
-                    case (rsel)
-                        7'h05: scsi_txbuf <= DI[7:0];
-                        default: ;
-                    endcase
-                end
-            endcase
-        end
-        else begin
-            if (mpwr_pend) begin
-                mpwr_pend <= '0;
-                rf_bgm.mpwr <= '1;
-            end
-            else if (rf_bgm.mpwr) begin
-                rf_bgm.mpwr <= '0;
-                rf_bgm.mpwa <= rf_bgm.mpwa + 1'd1;
-            end
-        end
-    end
-end
-
-always @(posedge CLK) if (CE) begin
-    scsi_reset_int <= '0;
-    scsi_rxbuf_rd <= '0;
-
-    if (~RESn) begin
-    end
-    else begin
-        if (~CSn & ~RDn) begin
-            case (A[2:1])
-                2'b10: begin
-                    case (rsel)
-                        7'h07: scsi_reset_int <= '1;
-                        default: ;
-                    endcase
-                end
-                2'b11: begin
-                    case (rsel)
-                        7'h05: scsi_rxbuf_rd <= '1;
-                        default: ;
-                    endcase
-                end
-                default: ;
-            endcase
-        end
-    end
-end
-
-always @* begin
-    dout = '0;
-    case (A[2])
-        1'b0: begin
-            dout[6:0] = rsel;
-            dout[23:16] = scsi_cur_bus_stat;
-        end
-        1'b1: begin
-            case (rsel)
-                7'h00: dout[7:0] = scsi_din;
-                7'h01: begin
-                    dout[7] = scsi_assert_rst;
-                    dout[4] = scsi_assert_ack;
-                    dout[2] = scsi_assert_sel;
-                    dout[1] = scsi_assert_atn;
-                    dout[0] = scsi_assert_data;
-                end
-                7'h02: begin
-                    dout[1] = scsi_dma_mode;
-                end
-                7'h03: begin
-                    dout[2] = scsi_assert_io;
-                    dout[1] = scsi_assert_cd;
-                    dout[0] = scsi_assert_msg;
-                end
-                7'h04: dout[7:0] = scsi_cur_bus_stat;
-                7'h05: begin
-                    dout[23:16] = scsi_rxbuf;
-                    dout[6] = scsi_dma_req;
-                    dout[4] = scsi_int_req_act;
-                    dout[3] = scsi_phase_match;
-                    dout[1] = ~SCSI_ATNn;
-                    dout[0] = ~SCSI_ACKn;
-                end
-                7'h06: dout[7:0] = scsi_rxbuf;
-                default: ;
-            endcase
-        end
-    endcase
-end
-
-assign DO = (~CSn & ~RDn) ? (A[1] ? dout[31:16] : dout[15:0]) : '0;
-
-assign BUSYn = '1; // TODO
-assign IRQn = '1; // TODO
+huc6272_cpuif cpuif
+   (
+    .*
+    );
 
 //////////////////////////////////////////////////////////////////////
 // DRAM memory controllers
 
 huc6272_dmc dmca
    (
-    .CLK(CLK),
-    .CE(CE),
-    .RESn(RESn),
+    .*,
 
     .A(vid_ma_a),
     .DI(vid_ma_di),
@@ -339,9 +116,7 @@ huc6272_dmc dmca
 
 huc6272_dmc dmcb
    (
-    .CLK(CLK),
-    .CE(CE),
-    .RESn(RESn),
+    .*,
 
     .A(vid_mb_a),
     .DI(vid_mb_di),
@@ -362,15 +137,19 @@ huc6272_dmc dmcb
     );
 
 //////////////////////////////////////////////////////////////////////
+// SCSI interface
+
+huc6272_scsi scsi
+   (
+    .*
+    );
+
+//////////////////////////////////////////////////////////////////////
 // Video interface
 
 huc6272_video video
    (
-    .CLK(CLK),
-    .CE(CE),
-    .RESn(RESn),
-
-    .rf_bgm(rf_bgm),
+    .*,
 
     .MA_A(vid_ma_a),
     .MA_DI(vid_ma_di),
@@ -386,94 +165,14 @@ huc6272_video video
     .MB_BE(vid_mb_be),
     .MB_WR(vid_mb_wr),
     .MB_REQ(vid_mb_req),
-    .MB_ACK(vid_mb_ack),
-
-    .DCK(DCK),
-    .DCK_NEGEDGE(DCK_NEGEDGE),
-    .HSYNC_POSEDGE(HSYNC_POSEDGE),
-    .HSYNC_NEGEDGE(HSYNC_NEGEDGE),
-    .VSYNC_POSEDGE(VSYNC_POSEDGE),
-    .VSYNC_NEGEDGE(VSYNC_NEGEDGE),
-    .VD(VD),
-    .VDE(VDE)
+    .MB_ACK(vid_mb_ack)
     );
-
-//////////////////////////////////////////////////////////////////////
-// SCSI interface
-
-logic           scsi_reqn_d;
-logic           scsi_assert_ack_dma, scsi_assert_ack_cnt;
-
-// Data transfer engine (for DMA)
-
-wire scsi_req_posedge = ~SCSI_REQn & scsi_reqn_d;
-
-always @(posedge CLK) if (CE) begin
-    scsi_reqn_d <= SCSI_REQn;
-
-    if (~RESn) begin
-        scsi_rxbuf <= '0;
-    end
-    else if (scsi_req_posedge) begin
-        // Latch DI into RX buffer on REQn assertion.
-        scsi_rxbuf <= scsi_din;
-    end
-end
-
-// REQn assertion or REG.7L write sets REG.5H[6].
-// RX buffer readout triggers ACKn pulse and clears REG.5H[6].
-
-assign scsi_dma_req_set = scsi_dma_mode & (scsi_req_posedge | scsi_start_dma_rx);
-assign scsi_dma_req_clr = scsi_dma_mode & scsi_rxbuf_rd;
-
-always @(posedge CLK) if (CE) begin
-    if (~RESn) begin
-        scsi_dma_req <= '0;
-    end
-    else begin
-        scsi_dma_req <= (scsi_dma_req & ~scsi_dma_req_clr) | scsi_dma_req_set;
-    end
-end
-
-// Enforce minimum ACKn pulse assertion and negation periods.
-always @(posedge CLK) if (CE) begin
-    if (~RESn | ~scsi_dma_mode) begin
-        scsi_assert_ack_dma <= '0;
-        scsi_assert_ack_cnt <= '0;
-    end
-    else begin
-        if (scsi_assert_ack_cnt)
-            scsi_assert_ack_cnt <= '0;
-        else begin
-            if (scsi_dma_req_clr) begin
-                scsi_assert_ack_dma <= '1;
-                scsi_assert_ack_cnt <= '1;
-            end
-            else if (scsi_assert_ack_dma) begin
-                scsi_assert_ack_dma <= '0;
-                scsi_assert_ack_cnt <= '1;
-            end
-        end
-    end
-end
-
-// Bus hookups
-
-assign scsi_cur_bus_stat = {~SCSI_RSTn, ~SCSI_BSYn, ~SCSI_REQn, ~SCSI_MSGn,
-                            ~SCSI_CDn, ~SCSI_IOn, ~SCSI_SELn, 1'b0};
-
-assign SCSI_DO = scsi_dout;
-assign SCSI_DOE = SCSI_IOn & scsi_assert_data;
-assign SCSI_ATNn = ~scsi_assert_atn;
-assign SCSI_ACKn = ~(scsi_assert_ack | scsi_assert_ack_dma);
-assign SCSI_RSTn = ~scsi_assert_rst;
-assign SCSI_SELn = ~scsi_assert_sel;
-
-assign scsi_din = SCSI_DI;
 
 endmodule
 
+`include "huc6272_cpuif.sv"
 `include "huc6272_dmc.sv"
+`include "huc6272_scsi.sv"
 `include "huc6272_video.sv"
 `include "huc6272_fetch.sv"
 `include "huc6272_bgm.sv"

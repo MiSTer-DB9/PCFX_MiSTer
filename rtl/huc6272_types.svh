@@ -4,6 +4,40 @@
 //
 // This program is GPL licensed. See COPYING for the full license.
 
+//////////////////////////////////////////////////////////////////////
+// SCSI
+
+typedef struct packed {
+    logic [7:0]     dout, txbuf;
+    
+    logic           assert_rst;
+    logic           assert_ack;
+    logic           assert_sel;
+    logic           assert_atn;
+    logic           assert_data;
+    logic           assert_io;
+    logic           assert_cd;
+    logic           assert_msg;
+    
+    logic           dma_mode;
+    logic           start_dma_rx, start_dma_tx;
+    logic           phase_match;
+    
+    logic           reset_int;
+    logic           rxbuf_rd;
+    logic           int_req_act;
+} rf_scsi_t;
+
+typedef struct packed {
+    logic [7:0]     cur_bus_stat;
+    logic           atn, ack;
+    logic [7:0]     din, rxbuf;
+    logic           dma_req;
+} st_scsi_t;
+
+//////////////////////////////////////////////////////////////////////
+// Video
+
 typedef enum bit [3:0] {
     BGF_UNUSED = 4'h0,
     BGF_INT_DOT_4 = 4'h1,
@@ -33,9 +67,9 @@ typedef struct packed {
     logic [8:0]     mpwd;
     logic           mpwr;
     logic           mpsw;
-    rf_bgp_t [4]    bgp;
+    rf_bgp_t [3:0]  bgp;
     logic           rsw;
-    logic           sub_wrap;
+    logic [3:0]     sub_wrap;
     logic [7:0]     sub_bat0, sub_cg0;
     logic [3:0]     size_sub_m0, size_sub_n0;
 } rf_bgm_t;
