@@ -23,7 +23,7 @@ module huc6272_fetch
     input         mpd_t MPRBUF,
 
     // Memory client interface
-    output [17:1] M_A,
+    output [17:0] M_A,
     input [15:0]  M_DI,
     output [15:0] M_DO,
     output [1:0]  M_BE,
@@ -51,13 +51,13 @@ endfunction
 // Microprogram engine
 
 mpd_t               mpe_d;
-logic [17:1]        mpe_ra;
+logic [17:0]        mpe_ra;
 logic               mpe_ren;
 logic [1:0]         mpe_layer;
 
 assign mpe_d = FETCH ? MPRBUF : 9'h100;
 
-function [17:1] mpe_addr(mpd_t mpd);
+function [17:0] mpe_addr(mpd_t mpd);
 logic [7:0] base;
 rf_bgp_t bgp;
     bgp = get_bgp(mpd.layer);
@@ -68,7 +68,7 @@ rf_bgp_t bgp;
         if (mpd.bat)
             ; // TODO
         else // CG
-            mpe_addr += {FETCH_BG_ROW[7:0], FETCH_BG_COL[7:3], mpd.cgoff};
+            mpe_addr[15:0] += {FETCH_BG_ROW[7:0], FETCH_BG_COL[7:3], mpd.cgoff};
     end
 endfunction
 
@@ -83,7 +83,7 @@ end
 
 logic               mtrg, mreq, mack;
 logic [1:0]         mdl;
-logic [17:1]        ma, ma_d;
+logic [17:0]        ma, ma_d;
 logic [15:0]        md;
 
 assign ma = mpe_ra;

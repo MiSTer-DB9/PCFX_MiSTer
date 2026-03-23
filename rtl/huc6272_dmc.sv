@@ -11,7 +11,7 @@ module huc6272_dmc
     input         RESn,
 
     // Client interface
-    input [17:1]  A,
+    input [17:0]  A,
     output [15:0] DI,
     input [15:0]  DO,
     input [1:0]   BE, // Byte Enable
@@ -30,69 +30,68 @@ module huc6272_dmc
     output        R_UCASn
     );
 
-logic               rract, rrtrg, rrend;
-logic [18:1]        ra;
-logic [8:0]         rao;
-logic [15:0]        rdi;
-logic               rras, rcas, rio;
-logic               rrav, rcav;
+logic               act, trg, rend;
+logic [17:0]        a;
+logic [8:0]         ao;
+logic               ras, cas, io;
 
-assign rrtrg = REQ & ~WR;
-assign rrend = CE & rio;
+assign trg = REQ;
+assign rend = CE & io;
 
 always @(posedge CLK) begin
     if (~RESn) begin
-        rract <= '0;
+        act <= '0;
     end
     else begin
-        if (~rract)
-            rract <= rrtrg;
+        if (~act)
+            act <= trg;
         else
-            rract <= ~rrend;
+            act <= ~rend;
     end
 end
 
 always @(posedge CLK) begin
-    if (~rract & rrtrg)
-        ra <= {1'b0, A};
+    if (~act & trg)
+        a <= A;
 end
 
 always @(posedge CLK) begin
     if (~RESn) begin
-        rao <= '0;
-        rras <= 0;
-        rcas <= 0;
-        rio <= 0;
+        ao <= '0;
+        ras <= 0;
+        cas <= 0;
+        io <= 0;
     end
-    else if (CE & rract) begin
-        if (~rras) begin
-            rras <= '1;
-            rao <= ra[18:10];
+    else if (CE & act) begin
+        if (~ras) begin
+            ras <= '1;
+            ao <= a[17:9];
         end
-        else if (~rcas) begin
-            rcas <= '1;
-            rao <= ra[9:1];
+        else if (~cas) begin
+            cas <= '1;
+            ao <= a[8:0];
         end
-        else if (~rio) begin
-            rio <= '1;
+        else if (~io) begin
+            io <= '1;
         end
         else begin
-            rras <= '0;
-            rcas <= '0;
-            rio <= '0;
-            rao <= '0;
+            ras <= '0;
+            cas <= '0;
+            io <= '0;
+            ao <= '0;
         end
     end
 end
 
 assign DI = R_DI;
-assign ACK = rrend;
+assign ACK = rend;
 
-assign R_A = rao;
-assign R_OEn = '0;
-assign R_WEn = '1;
-assign R_RASn = ~rras;
-assign R_LCASn = ~rcas;
-assign R_UCASn = ~rcas;
+assign R_DO = DO;
+assign R_A = ao;
+assign R_OEn = ~(act & ~WR);
+assign R_WEn = ~(io & WR);
+assign R_RASn = ~ras;
+assign R_LCASn = ~cas;
+assign R_UCASn = ~cas;
 
 endmodule

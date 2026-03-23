@@ -25,11 +25,36 @@ module huc6272_cpuif
     output        rf_bgm_t rf_bgm,
 
     // Status
-    input         st_scsi_t st_scsi
+    input         st_scsi_t st_scsi,
+
+    // Memory client interface
+    output        M_BA,
+    output [17:0] M_A,
+    input [15:0]  M_DI,
+    output [15:0] M_DO,
+    output [1:0]  M_BE,
+    output        M_WR,
+    output        M_REQ,
+    input         M_ACK
     );
+
+typedef struct packed {
+    logic               page; // KA[17]
+    logic [2:0]         _res28;
+    logic signed [9:0]  ainc;
+    logic               bank; // -A/B
+    logic [16:0]        addr; // KA[16:0]
+} kradr_t;
 
 logic [6:0]     rsel;
 logic [31:0]    dout;
+
+kradr_t         krra, krwa;
+logic [15:0]    krd;
+logic           krwr_pend;
+logic           krrd_act, krwr_act;
+logic           krrd_done;
+kradr_t         kra;
 
 logic           mpwr_pend;
 
@@ -43,6 +68,12 @@ always @(posedge CLK) if (CE) begin
         rsel <= '0;
         rf_scsi <= '0;
         rf_bgm <= '0;
+        krra <= '0;
+        krwa <= '0;
+        krd <= '0;
+        krwr_pend <= '0;
+        krwr_act <= '0;
+        krrd_done <= '0;
         mpwr_pend <= '0;
     end
     else begin
@@ -72,6 +103,12 @@ always @(posedge CLK) if (CE) begin
                         end
                         7'h05: rf_scsi.start_dma_tx <= '1;
                         7'h07: rf_scsi.start_dma_rx <= '1;
+                        7'h0c: krra[0+:16] <= DI;
+                        7'h0d: krwa[0+:16] <= DI;
+                        7'h0e: begin
+                            krd <= DI;
+                            krwr_pend <= '1;
+                        end
                         7'h10: begin
                             rf_bgm.bgp[0].format <= bg_format_t'(DI[00+:4]);
                             rf_bgm.bgp[1].format <= bg_format_t'(DI[04+:4]);
@@ -136,6 +173,12 @@ always @(posedge CLK) if (CE) begin
                 2'b11: begin
                     case (rsel)
                         7'h05: rf_scsi.txbuf <= DI[7:0];
+                        7'h0c: krra[16+:16] <= DI;
+                        7'h0d: krwa[16+:16] <= DI;
+                        7'h0e: begin
+                            krd <= DI;
+                            krwr_pend <= '1;
+                        end
                         default: ;
                     endcase
                 end
@@ -150,6 +193,11 @@ always @(posedge CLK) if (CE) begin
                 rf_bgm.mpwr <= '0;
                 rf_bgm.mpwa <= rf_bgm.mpwa + 1'd1;
             end
+
+            if (krwr_pend) begin
+                krwr_pend <= '0;
+                krwr_act <= '1;
+            end
         end
 
         if (~CSn & ~RDn) begin
@@ -163,6 +211,43 @@ always @(posedge CLK) if (CE) begin
                 2'b11: begin
                     case (rsel)
                         7'h05: rf_scsi.rxbuf_rd <= '1;
+                        default: ;
+                    endcase
+                end
+                default: ;
+            endcase
+        end
+        else begin
+            krrd_done <= '0;
+        end
+
+        if (krrd_act & M_ACK) begin
+            krd <= M_DI;
+            krrd_done <= '1;
+            krra.addr += 16'(krra.ainc);
+        end
+        if (krwr_act & M_ACK) begin
+            krwr_act <= '0;
+            krwa.addr += 16'(krwa.ainc);
+        end
+    end
+end
+
+always @* begin
+    krrd_act = '0;
+
+    if (RESn) begin
+        if (~CSn & ~RDn) begin
+            case (A[2:1])
+                2'b10: begin
+                    case (rsel)
+                        7'h0e: krrd_act = ~krrd_done;
+                        default: ;
+                    endcase
+                end
+                2'b11: begin
+                    case (rsel)
+                        7'h0e: krrd_act = ~krrd_done;
                         default: ;
                     endcase
                 end
@@ -207,6 +292,9 @@ always @* begin
                     dout[0] = st_scsi.ack;
                 end
                 7'h06: dout[7:0] = st_scsi.rxbuf;
+                7'h0c: dout = krra;
+                7'h0d: dout = krwa;
+                7'h0e: dout = {2{krd}};
                 default: ;
             endcase
         end
@@ -215,7 +303,22 @@ end
 
 assign DO = (~CSn & ~RDn) ? (A[1] ? dout[31:16] : dout[15:0]) : '0;
 
-assign BUSYn = '1; // TODO
+assign BUSYn = ~((~CSn & (~RDn | ~WRn)) & (krrd_act | krwr_act));
 assign IRQn = '1; // TODO
+
+always @* begin
+    kra = '0;
+    if (krrd_act)
+        kra = krra;
+    else if (krwr_act)
+        kra = krwa;
+end
+
+assign M_BA = kra.bank;
+assign M_A = {kra.page, kra.addr};
+assign M_DO = krd;
+assign M_BE = '1;
+assign M_WR = krwr_act;
+assign M_REQ = krrd_act | krwr_act;
 
 endmodule

@@ -14,7 +14,7 @@ module huc6272_video
     input         rf_bgm_t rf_bgm,
 
     // Bank A memory client interface
-    output [17:1] MA_A,
+    output [17:0] MA_A,
     input [15:0]  MA_DI,
     output [15:0] MA_DO,
     output [1:0]  MA_BE,
@@ -23,7 +23,7 @@ module huc6272_video
     input         MA_ACK,
 
     // Bank B memory client interface
-    output [17:1] MB_A,
+    output [17:0] MB_A,
     input [15:0]  MB_DI,
     output [15:0] MB_DO,
     output [1:0]  MB_BE,

@@ -23,8 +23,9 @@ module pd424260
 logic [8:0]     row;
 logic [8:0]     col;
 logic [15:0] 	mem[1<<9][1<<9];
-logic [15:0]    rbuf, rout;
+logic [15:0]    rbuf, rout, wbuf;
 logic           rac = 0, rcd = 0, cac = 0, aa = 1;
+logic           wen = 0;
 
 task read(input [8:0] row, input [8:0] col, output [15:0] d);
     d = mem[row][col];
@@ -45,6 +46,9 @@ always @(negedge RASn)
 always @(posedge RASn) begin
     if ($time)
         assert(rac);
+    if (wen)
+        mem[row][col] <= wbuf;
+    wen <= 0;
     rac <= 0;
     rcd <= 0;
 end
@@ -57,14 +61,20 @@ end
 always @(negedge LCASn or negedge UCASn) begin
     if ($time)
         assert(rcd);
-    #20 cac <= 1;
     col <= A;
+    #20 cac <= 1;
 end
 
 always @(posedge LCASn or posedge UCASn) begin
     if ($time)
         assert(cac);
     cac <= 0;
+end
+
+always @(negedge WEn) begin
+    wbuf[0+:8] <= (OEn & ~LCASn) ? IO[0+:8] : 'X;
+    wbuf[8+:8] <= (OEn & ~UCASn) ? IO[8+:8] : 'X;
+    wen <= 1;
 end
 
 assign rbuf = mem[row][col];

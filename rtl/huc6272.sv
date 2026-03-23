@@ -72,21 +72,45 @@ rf_bgm_t        rf_bgm;
 
 st_scsi_t       st_scsi;
 
-logic [17:1]    vid_ma_a;
-logic [15:0]    vid_ma_di, vid_ma_do;
-logic [1:0]     vid_ma_be;
-logic           vid_ma_wr, vid_ma_req, vid_ma_ack;
-logic [17:1]    vid_mb_a;
-logic [15:0]    vid_mb_di, vid_mb_do;
-logic [1:0]     vid_mb_be;
-logic           vid_mb_wr, vid_mb_req, vid_mb_ack;
+wire            cpuif_m_ba;
+wire [17:0]     cpuif_m_a;
+wire [15:0]     cpuif_m_di, cpuif_m_do;
+wire [1:0]      cpuif_m_be;
+wire            cpuif_m_wr, cpuif_m_req, cpuif_m_ack;
+
+wire [17:0]     vid_ma_a;
+wire [15:0]     vid_ma_di, vid_ma_do;
+wire [1:0]      vid_ma_be;
+wire            vid_ma_wr, vid_ma_req, vid_ma_ack;
+wire [17:0]     vid_mb_a;
+wire [15:0]     vid_mb_di, vid_mb_do;
+wire [1:0]      vid_mb_be;
+wire            vid_mb_wr, vid_mb_req, vid_mb_ack;
+
+wire [17:0]     dmca_m_a;
+wire [15:0]     dmca_m_di, dmca_m_do;
+wire [1:0]      dmca_m_be;
+wire            dmca_m_wr, dmca_m_req, dmca_m_ack;
+wire [17:0]     dmcb_m_a;
+wire [15:0]     dmcb_m_di, dmcb_m_do;
+wire [1:0]      dmcb_m_be;
+wire            dmcb_m_wr, dmcb_m_req, dmcb_m_ack;
 
 //////////////////////////////////////////////////////////////////////
 // CPU memory / I/O bus interface
 
 huc6272_cpuif cpuif
    (
-    .*
+    .*,
+
+    .M_BA(cpuif_m_ba),
+    .M_A(cpuif_m_a),
+    .M_DI(cpuif_m_di),
+    .M_DO(cpuif_m_do),
+    .M_BE(cpuif_m_be),
+    .M_WR(cpuif_m_wr),
+    .M_REQ(cpuif_m_req),
+    .M_ACK(cpuif_m_ack)
     );
 
 //////////////////////////////////////////////////////////////////////
@@ -96,13 +120,13 @@ huc6272_dmc dmca
    (
     .*,
 
-    .A(vid_ma_a),
-    .DI(vid_ma_di),
-    .DO(vid_ma_do),
-    .BE(vid_ma_be),
-    .WR(vid_ma_wr),
-    .REQ(vid_ma_req),
-    .ACK(vid_ma_ack),
+    .A(dmca_m_a),
+    .DI(dmca_m_di),
+    .DO(dmca_m_do),
+    .BE(dmca_m_be),
+    .WR(dmca_m_wr),
+    .REQ(dmca_m_req),
+    .ACK(dmca_m_ack),
 
     .R_DI(RA_DI),
     .R_DO(RA_DO),
@@ -118,13 +142,13 @@ huc6272_dmc dmcb
    (
     .*,
 
-    .A(vid_mb_a),
-    .DI(vid_mb_di),
-    .DO(vid_mb_do),
-    .BE(vid_mb_be),
-    .WR(vid_mb_wr),
-    .REQ(vid_mb_req),
-    .ACK(vid_mb_ack),
+    .A(dmcb_m_a),
+    .DI(dmcb_m_di),
+    .DO(dmcb_m_do),
+    .BE(dmcb_m_be),
+    .WR(dmcb_m_wr),
+    .REQ(dmcb_m_req),
+    .ACK(dmcb_m_ack),
 
     .R_DI(RB_DI),
     .R_DO(RB_DO),
@@ -134,6 +158,14 @@ huc6272_dmc dmcb
     .R_RASn(RB_RASn),
     .R_LCASn(RB_LCASn),
     .R_UCASn(RB_UCASn)
+    );
+
+//////////////////////////////////////////////////////////////////////
+// Memory fabric
+
+huc6272_fabric fabric
+   (
+    .*
     );
 
 //////////////////////////////////////////////////////////////////////
@@ -172,6 +204,9 @@ endmodule
 
 `include "huc6272_cpuif.sv"
 `include "huc6272_dmc.sv"
+`include "huc6272_fabric.sv"
+`include "huc6272_fabric_tee.sv"
+`include "huc6272_fabric_bank.sv"
 `include "huc6272_scsi.sv"
 `include "huc6272_video.sv"
 `include "huc6272_fetch.sv"
