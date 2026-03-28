@@ -72,10 +72,13 @@ module pcfx_top
 reg [24:0]      romwr_a;
 reg [31:0]      romwr_d;
 reg             romwr_req = 0;
+wire            romwr_ack;
 logic [24:0]    bk_sdrd_a;
 logic [31:0]    bk_sdrd_din, bk_sdrd_dout;
 logic           bk_sdrd_we_req = 0, bk_sdrd_rd_req = 0;
 logic           bk_sdrd_we_ack, bk_sdrd_rd_ack;
+logic [31:0]    bk_sd_blk_cnt [2];
+logic [1:0]     bk_mounted;
 
 //////////////////////////////////////////////////////////////////////
 // SDRAM controller
@@ -317,7 +320,6 @@ fx_bmp bmp
 
 reg         romwr_active = 0;
 reg         romwr_a1;
-wire        romwr_ack;
 wire        romwr_download_bmp;
 
 always @(posedge clk_sys) begin
@@ -408,13 +410,12 @@ typedef enum bit [3:0] {
     BKST_NEXT_VD
 } bkst_t;
 
-logic [1:0]     bk_mounted;
-logic [31:0]    bk_sd_blk_cnt [2];
-
 bkst_t          bk_state = BKST_IDLE;
 logic           bk_loading = 0;
 logic           bk_saving = 0;
 logic           sd_vd; // volume select
+logic           bk_sdrd_copy_req = 0;
+logic           bk_sdrd_copy_ack = 0;
 
 logic           sd_ack_d;
 
@@ -451,7 +452,7 @@ always @(posedge clk_sys) begin
         end
         BKST_SELECT_VD: begin
             if (bk_mounted[sd_vd])
-                bk_state <= bk_loading ? BKST_START_SD_RD : BKST_START_SDRAM_RD;
+                bk_state <= bkst_t'(bk_loading ? BKST_START_SD_RD : BKST_START_SDRAM_RD);
             else
                 bk_state <= BKST_NEXT_VD;
             sd_lba <= 0;
@@ -489,7 +490,7 @@ always @(posedge clk_sys) begin
         end
         BKST_SDRAM_RD: begin
             if (bk_sdrd_copy_req == bk_sdrd_copy_ack)
-                bk_state <= bk_loading ? BKST_START_SDRAM_WR : BKST_START_SD_WR;
+                bk_state <= bkst_t'(bk_loading ? BKST_START_SDRAM_WR : BKST_START_SD_WR);
         end
         BKST_NEXT_LBA: begin
             if (sd_lba + 1'd1 == bk_sd_blk_cnt[sd_vd]) begin
@@ -498,7 +499,7 @@ always @(posedge clk_sys) begin
             end
             else begin
                 sd_lba <= sd_lba + 1'd1;
-                bk_state <= bk_loading ? BKST_START_SD_RD : BKST_START_SDRAM_RD;
+                bk_state <= bkst_t'(bk_loading ? BKST_START_SD_RD : BKST_START_SDRAM_RD);
             end
         end
         BKST_NEXT_VD: begin
@@ -518,8 +519,6 @@ end
 //////////////////////////////////////////////////////////////////////
 // SD card transfer buffer
 
-logic           bk_sdrd_copy_req = 0;
-logic           bk_sdrd_copy_ack = 0;
 logic           bk_sdrd_copying = 0;
 logic [24:0]    bk_sdrd_base_a;
 

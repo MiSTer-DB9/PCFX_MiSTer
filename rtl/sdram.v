@@ -82,9 +82,9 @@ localparam [3:0] STATE_IDLE  = 4'd0;   // first state in cycle
 localparam [3:0] STATE_START = 4'd1;   // state in which a new command can be started
 localparam [3:0] STATE_CONT  = STATE_START+RASCAS_DELAY; // 4 command can be continued
 localparam [3:0] STATE_LAST  = 4'd7;   // last state in cycle
-localparam [3:0] STATE_READY = STATE_READN+1;
 localparam [3:0] STATE_READ0 = STATE_CONT+CAS_LATENCY+1; // first read cycle
 localparam [3:0] STATE_READN = STATE_READ0+(1<<BURST_LENGTH)-1; // last read cycle
+localparam [3:0] STATE_READY = STATE_READN+1;
 localparam [3:0] STATE_WRIT0 = STATE_CONT;               // first write cycle
 localparam [3:0] STATE_WRITN = STATE_CONT+(1<<BURST_LENGTH)-1; // last write cycle
 

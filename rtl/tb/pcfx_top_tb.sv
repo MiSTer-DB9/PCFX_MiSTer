@@ -50,6 +50,19 @@ sdram_xsds sdrb (.*);
 
 //////////////////////////////////////////////////////////////////////
 
+logic [1:0] img_mounted = 0;
+logic       img_readonly = 0;
+logic [63:0] img_size = 0;
+
+logic [31:0] sd_lba;
+logic [1:0]  sd_rd, sd_wr;
+logic [1:0]  sd_ack;
+
+logic [7:0]  sd_buff_addr = 0;
+logic [15:0] sd_buff_dout = 0;
+logic [15:0] sd_buff_din;
+logic        sd_buff_wr = 0;
+
 reg         ioctl_download = 0;
 reg [7:0]   ioctl_index;
 reg         ioctl_wr;
@@ -266,16 +279,6 @@ endtask
 
 //////////////////////////////////////////////////////////////////////
 
-logic [1:0]     img_mounted = 0;
-logic           img_readonly = 0;
-logic [63:0]    img_size = 0;
-logic [31:0]    sd_lba;
-logic [1:0]     sd_rd, sd_wr;
-logic [1:0]     sd_ack;
-logic [7:0]     sd_buff_addr = 0;
-logic [15:0]    sd_buff_dout = 0;
-logic [15:0]    sd_buff_din;
-logic           sd_buff_wr = 0;
 logic           sd_buff_rd = 0;
 
 int             sd_vd;
@@ -313,7 +316,7 @@ logic [15:0] data;
             if ($feof(sd_fin[vd]))
                 data = '0;
             else
-                $fread(data, sd_fin[vd], 0, 2);
+                code = $fread(data, sd_fin[vd], 0, 2);
             sd_buff_dout <= {data[7:0], data[15:8]}; // $fread is big-endian
             sd_buff_wr <= 1;
         end
@@ -410,14 +413,15 @@ endtask
 task verify_bk_load(int vd);
 bit [15:0] dfile, dram;
 bit [24:0] base, addr;
+integer code;
     if (sd_size[vd] == 0)
         return;
     $display("Verifying SD vol %1d", vd);
     base = (vd != 0) ? pcfx_top.memif_sdram.BMP_BASE_A : pcfx_top.memif_sdram.SRAM_BASE_A;
     addr = 0;
-    $fseek(sd_fin[vd], 0, 0);
+    code = $fseek(sd_fin[vd], 0, 0);
     for (longint i = 0; i < sd_size[vd]; i++) begin
-        $fread(dfile, sd_fin[vd], 0, 2);
+        code = $fread(dfile, sd_fin[vd], 0, 2);
         dfile = {dfile[7:0], dfile[15:8]}; // $fread is big-endian
         sdram_read(base + addr, dram);
         assert(dfile == dram) else $error("Wanted %x, got %x @ addr. %x", dfile, dram, addr);
