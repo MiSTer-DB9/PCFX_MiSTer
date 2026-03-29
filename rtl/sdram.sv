@@ -23,7 +23,7 @@ module sdram
 	input             init,        // reset to initialize RAM
 	input             clk,         // clock ~100MHz
 
-	inout  reg [15:0] SDRAM_DQ,    // 16 bit bidirectional data bus
+	inout      [15:0] SDRAM_DQ,    // 16 bit bidirectional data bus
 	output reg [12:0] SDRAM_A,     // 13 bit multiplexed address bus
 	output            SDRAM_DQML,  // two byte masks
 	output            SDRAM_DQMH,  // 
@@ -59,14 +59,6 @@ module sdram
 	output reg        ch3_ready
 );
 
-assign SDRAM_nCS  = chip;
-assign SDRAM_nRAS = command[2];
-assign SDRAM_nCAS = command[1];
-assign SDRAM_nWE  = command[0];
-assign SDRAM_CKE  = 1;
-assign {SDRAM_DQMH,SDRAM_DQML} = SDRAM_A[12:11];
-
-
 // Burst length = 4
 localparam BURST_LENGTH        = 2;
 localparam BURST_CODE          = (BURST_LENGTH == 8) ? 3'b011 : (BURST_LENGTH == 4) ? 3'b010 : (BURST_LENGTH == 2) ? 3'b001 : 3'b000;  // 000=1, 001=2, 010=4, 011=8
@@ -92,6 +84,7 @@ wire [2:0] CMD_LOAD_MODE       = 3'b000;
 reg [13:0] refresh_count = startup_refresh_max - sdram_startup_cycles;
 reg  [2:0] command;
 reg        chip;
+reg [15:0] dqout;
 
 localparam STATE_STARTUP = 0;
 localparam STATE_WAIT    = 1;
@@ -149,7 +142,7 @@ always @(posedge clk) begin
 	if(data_ready_delay3[0]) ch3_dout[15:08] <= dq_reg[7:0];
 	if(data_ready_delay3[0]) ch3_ready <= 1;
 
-	SDRAM_DQ <= 16'bZ;
+	dqout <= 16'bZ;
 
 	command <= CMD_NOP;
 	case (state)
@@ -263,7 +256,7 @@ always @(posedge clk) begin
 			SDRAM_A <= cas_addr;
 			if(saved_wr) begin
 				command  <= CMD_WRITE;
-				SDRAM_DQ <= saved_data[15:0];
+				dqout    <= saved_data[15:0];
 				state <= STATE_RW2;
 			end
 			else begin
@@ -280,7 +273,7 @@ always @(posedge clk) begin
 			SDRAM_A[10]    <= 1;
 			SDRAM_A[0]     <= 1;
 			command        <= CMD_WRITE;
-			SDRAM_DQ       <= saved_data[31:16];
+			dqout          <= saved_data[31:16];
          SDRAM_A[12:11] <= ~saved_be[3:2];
          if(ch == 0)      ch1_ready <= 1;
 			else if(ch == 1) ch2_ready <= 1;
@@ -294,6 +287,14 @@ always @(posedge clk) begin
 		refresh_count <= startup_refresh_max - sdram_startup_cycles;
 	end
 end
+
+assign SDRAM_DQ   = dqout;
+assign SDRAM_nCS  = chip;
+assign SDRAM_nRAS = command[2];
+assign SDRAM_nCAS = command[1];
+assign SDRAM_nWE  = command[0];
+assign SDRAM_CKE  = 1;
+assign {SDRAM_DQMH,SDRAM_DQML} = SDRAM_A[12:11];
 
 //altddio_out
 //#(
