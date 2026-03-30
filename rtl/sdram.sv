@@ -52,8 +52,8 @@ module sdram
 	output reg        ch2_ready,
 
 	input      [26:0] ch3_addr,
-	output reg [15:0] ch3_dout,
-	input      [15:0] ch3_din,
+	output reg [31:0] ch3_dout,
+	input      [31:0] ch3_din,
 	input             ch3_req,
 	input             ch3_rnw,
 	output reg        ch3_ready
@@ -138,8 +138,8 @@ always @(posedge clk) begin
 	if(data_ready_delay2[0]) ch2_dout[31:16] <= dq_reg;
 	if(data_ready_delay2[0]) ch2_ready <= 1;
 
-	if(data_ready_delay3[1]) ch3_dout[07:00] <= dq_reg[7:0];
-	if(data_ready_delay3[0]) ch3_dout[15:08] <= dq_reg[7:0];
+	if(data_ready_delay3[1]) ch3_dout[15:00] <= dq_reg;
+	if(data_ready_delay3[0]) ch3_dout[31:16] <= dq_reg;
 	if(data_ready_delay3[0]) ch3_ready <= 1;
 
 	dqout <= 16'bZ;
@@ -241,7 +241,7 @@ always @(posedge clk) begin
 			else if(ch3_rq) begin
 				{cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {2'b00, ch3_rnw, ch3_addr[25:1]};
 				chip       <= ch3_addr[26];
-				saved_data <= {8'hFF, ch3_din[15:8], 8'hFF, ch3_din[7:0]};
+				saved_data <= ch3_din;
 				saved_wr   <= ~ch3_rnw;
 				ch         <= 2;
 				ch3_rq     <= 0;
@@ -320,5 +320,17 @@ assign {SDRAM_DQMH,SDRAM_DQML} = SDRAM_A[12:11];
 //	.sclr(1'b0),
 //	.sset(1'b0)
 //);
+
+function [1:0] addr_to_bank(input [26:0] a);
+	addr_to_bank = a[24:23];
+endfunction
+
+function [12:0] addr_to_row(input [26:0] a);
+	addr_to_row = a[22:10];
+endfunction
+
+function [9:0] addr_to_col(input [26:0] a);
+	addr_to_col = {a[25], a[9:1]};
+endfunction
 
 endmodule
