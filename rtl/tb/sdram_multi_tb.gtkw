@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v3.4.0 (w)1999-2022 BSI
-[*] Mon Mar 30 00:03:30 2026
+[*] Mon Mar 30 03:58:45 2026
 [*]
 [dumpfile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/sdram_multi_tb.vcd"
-[dumpfile_mtime] "Mon Mar 30 00:02:59 2026"
-[dumpfile_size] 838021
+[dumpfile_mtime] "Mon Mar 30 03:58:06 2026"
+[dumpfile_size] 1105160
 [savefile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/sdram_multi_tb.gtkw"
-[timestart] 149915
+[timestart] 150183
 [size] 1333 600
 [pos] -1 -1
-*-9.556578 150800 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+*-6.276820 150240 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 [markername] AA
 [markername] BB
 [markername] CC
@@ -58,6 +58,22 @@ sdram_multi_tb.sdrb.u1a.DQ[15:0]
 @28
 sdram_multi_tb.sdrb.u1a.DQML
 sdram_multi_tb.sdrb.u1a.DQMH
+sdram_multi_tb.sdrb.u1a.cmd[3:0]
+@24
+sdram_multi_tb.sdrb.u1a.trrd_cnt
+sdram_multi_tb.sdrb.u1a.trc_cnt0[31:0]
+sdram_multi_tb.sdrb.u1a.trcd_cnt0[31:0]
+sdram_multi_tb.sdrb.u1a.trp_cnt0[31:0]
+@25
+sdram_multi_tb.sdrb.u1a.tras_cnt0[31:0]
+@22
+sdram_multi_tb.sdrb.u1a.prechg[3:0]
+sdram_multi_tb.sdrb.u1a.active[3:0]
+sdram_multi_tb.sdrb.u1a.row_open[3:0]
+@420
+sdram_multi_tb.sdrb.u1a.rd_cnt
+@28
+sdram_multi_tb.sdrb.u1a.auto_refresh
 @1000200
 -u1a
 @28
@@ -80,7 +96,6 @@ sdram_multi_tb.sdram.ch2_req
 sdram_multi_tb.sdram.ch2_ready
 @22
 sdram_multi_tb.sdram.ch3_addr[26:0]
-@23
 sdram_multi_tb.sdram.ch3_dout[31:0]
 @28
 sdram_multi_tb.sdram.ch3_req

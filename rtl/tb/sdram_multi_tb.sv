@@ -41,7 +41,8 @@ wire        SDRAM_nCAS;
 wire        SDRAM_nRAS;
 wire        SDRAM_nWE;
 
-sdram_xsds sdrb (.*);
+// Clock rate matches N64_MiSTer. TODO: Match PCFX_MiSTer.
+sdram_xsds #(.CLK_MHZ(62.5)) sdrb (.*);
 
 task sdram_read(input [26:0] addr, output [15:0] d);
     sdrb.u1a.read(sdram.addr_to_bank(addr),
