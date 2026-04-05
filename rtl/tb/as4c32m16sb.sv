@@ -70,7 +70,7 @@ logic [15:0]    din, dout;
 logic           rden;
 logic [15:0]    wr_din;
 logic           dqml, dqmh;
-logic [1:0]     wr_dqm;
+logic [1:0]     dqmn;
 logic           dqloe, dqhoe;
 logic [3:0]     active, row_open, prechg;
 logic           auto_refresh;
@@ -276,12 +276,12 @@ end
 
 always @(posedge CLK) if (cke) begin
     wr_din <= din;
-    wr_dqm <= {dqmh, dqml};
+    dqmn <= ~{dqmh, dqml};
 
     if (wr_cnt != 0) begin
-        if (~wr_dqm[1])
+        if (dqmn[1])
             mem[bank][row[bank]][col[bank]][15:8] <= wr_din[15:8];
-        if (~wr_dqm[0])
+        if (dqmn[0])
             mem[bank][row[bank]][col[bank]][7:0] <= wr_din[7:0];
         bc <= bc + 1'd1;
         wr_cnt <= wr_cnt - 1;
@@ -289,7 +289,7 @@ always @(posedge CLK) if (cke) begin
 end
 
 assign rden = (cas_cnt == 0) & (rd_cnt != 0);
-assign {dqhoe, dqloe} = {2{rden}} & {~dqmh, ~dqml};
+assign {dqhoe, dqloe} = {2{rden}} & dqmn;
 
 assign DQ[15:8] = dqhoe ? dout[15:8] : 'Z;
 assign DQ[7:0]  = dqloe ? dout[7:0]  : 'Z;
