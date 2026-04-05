@@ -118,36 +118,51 @@ initial begin
     ch1_be = '1;
 end
 
-always @(krama_read) begin
+always @(krama_read) begin :krama_read_blk
+reg [15:0] d;
+    sdram_read(ch2_addr, d);
     ch2_addr <= ch2_addr + 2'd2;
     ch2_rnw <= 1;
     ch2_req <= 1;
     @(posedge clk_ram) ch2_req <= 0;
     @(negedge ~ch2_ready) ;
+    assert(ch2_dout[15:0] == d);
 end
 
-always @(kramb_read) begin
+always @(kramb_read) begin :kramb_read_blk
+reg [15:0] d;
     ch3_addr <= ch3_addr + 2'd2;
     ch3_rnw <= 1;
     ch3_req <= 1;
     @(posedge clk_ram) ch3_req <= 0;
     @(negedge ~ch3_ready) ;
+    sdram_read(ch3_addr, d);
+    assert(ch3_dout[15:0] == d);
 end
 
-always @(cpu_read) begin
-    ch1_addr <= ch1_addr + 2'd2;
+always @(cpu_read) begin :cpu_read_blk
+reg [31:0] d;
+    ch1_addr <= ch1_addr + 3'd4;
     ch1_rnw <= 1;
     ch1_req <= 1;
     @(posedge clk_ram) ch1_req <= 0;
-    @(negedge ~ch1_ready) ;
+    @(negedge ch1_ready) ;
+    sdram_read(ch1_addr, d[15:0]);
+    sdram_read(ch1_addr+2, d[31:16]);
+    assert(ch1_dout == d);
 end
 
-always @(cpu_write) begin
+always @(cpu_write) begin :cpu_write_blk
+reg [31:0] d;
     ch1_din <= ~ch1_dout;
     ch1_rnw <= 0;
     ch1_req <= 1;
     @(posedge clk_ram) ch1_req <= 0;
     @(negedge ~ch1_ready) ;
+    repeat (5) @(posedge clk_ram) ; // wait for write to commit
+    sdram_read(ch1_addr, d[15:0]);
+    sdram_read(ch1_addr+2, d[31:16]);
+    assert(d == ch1_din);
 end
 
 //////////////////////////////////////////////////////////////////////
