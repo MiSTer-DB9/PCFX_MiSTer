@@ -41,8 +41,9 @@ wire        SDRAM_nCAS;
 wire        SDRAM_nRAS;
 wire        SDRAM_nWE;
 
-// Clock rate matches N64_MiSTer. TODO: Match PCFX_MiSTer.
-sdram_xsds #(.CLK_MHZ(62.5)) sdrb (.*);
+localparam CLK_MHZ = 100.0;
+
+sdram_xsds #(.CLK_MHZ(CLK_MHZ)) sdrb (.*);
 
 task sdram_read(input [26:0] addr, output [15:0] d);
     sdrb.u1a.read(sdram.addr_to_bank(addr),
@@ -70,7 +71,7 @@ logic           ch1_rnw, ch2_rnw, ch3_rnw;
 logic [3:0]     ch1_be;
 logic           ch1_ready, ch2_ready, ch3_ready;
 
-sdram sdram
+sdram #(.CLK_MHZ(CLK_MHZ)) sdram
    (
     .*,
 
@@ -84,7 +85,6 @@ sdram sdram
     .ch1_rnw(ch1_rnw),
     .ch1_be(ch1_be),
     .ch1_ready(ch1_ready),
-    .ch1_reqprocessed(),
 
     .ch2_addr(ch2_addr),
     .ch2_dout(ch2_dout),
@@ -109,8 +109,8 @@ assign SDRAM_CLK = clk_ram;
 event           krama_read, kramb_read, cpu_read, cpu_write;
 
 localparam [26:0] ch1_addr0 = 27'h0000000;
-localparam [26:0] ch2_addr0 = 27'h0800000;
-localparam [26:0] ch3_addr0 = 27'h1000000;
+localparam [26:0] ch2_addr0 = 27'h1000000;
+localparam [26:0] ch3_addr0 = 27'h2000000;
 
 initial begin
     ch1_addr = ch1_addr0;

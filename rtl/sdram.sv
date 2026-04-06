@@ -46,7 +46,6 @@ module sdram
     input             ch1_rnw,     // 1 - read, 0 - write
     input      [3:0]  ch1_be,
     output reg        ch1_ready,
-    output reg        ch1_reqprocessed,
     
     input      [26:0] ch2_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
     output reg [31:0] ch2_dout,    // data output to cpu
@@ -89,6 +88,10 @@ localparam MODE                = {3'b000, NO_WRITE_BURST, OP_MODE, CAS_LATENCY, 
 localparam sdram_startup_cycles= 14'd12100;// 100us, plus a little more, @ 100MHz
 localparam cycles_per_refresh  = 14'd300;  // (64000*64)/8192-1 Calc'd as (64ms @ 64MHz)/8192 rose
 localparam startup_refresh_max = 14'b11111111111111;
+localparam startup_mode_cnt    = startup_refresh_max - 7;
+localparam startup_ref2_cnt    = startup_mode_cnt - TRC_MIN;
+localparam startup_ref1_cnt    = startup_ref2_cnt - TRC_MIN;
+localparam startup_pchg_cnt    = startup_ref1_cnt - TRP_MIN;
 
 // SDRAM commands
 wire [2:0] CMD_NOP             = 3'b111;
@@ -100,6 +103,7 @@ wire [2:0] CMD_AUTO_REFRESH    = 3'b001;
 wire [2:0] CMD_LOAD_MODE       = 3'b000;
 
 reg [13:0] refresh_count = startup_refresh_max - sdram_startup_cycles;
+reg  [3:0] refresh_wait;
 reg  [2:0] command;
 reg [15:0] dqout;
 
@@ -167,12 +171,8 @@ localparam STATE_STARTUP = 0;
 localparam STATE_WAIT    = 1;
 localparam STATE_RW1     = 2;
 localparam STATE_RW2     = 3;
-localparam STATE_IDLE    = 4;
-localparam STATE_IDLE_1  = 5;
-localparam STATE_IDLE_2  = 6;
-localparam STATE_IDLE_3  = 7;
-localparam STATE_IDLE_4  = 8;
-localparam STATE_IDLE_5  = 9;
+localparam STATE_ACTIVE  = 4;
+localparam STATE_REFRESH = 5;
 
 reg  [3:0] state = STATE_STARTUP;
 
@@ -211,7 +211,7 @@ assign babe[0] = ch1_be;
 assign babe[1] = 4'b0011;
 assign babe[2] = 4'b0011;
 
-wire bapause = state != STATE_IDLE || refresh_count > cycles_per_refresh;
+wire bapause = state != STATE_ACTIVE || refresh_count > cycles_per_refresh;
 wire baidle = (bast[0] == BAST_IDLE && bast[1] == BAST_IDLE &&
                bast[2] == BAST_IDLE && bast[3] == BAST_IDLE);
 
@@ -268,7 +268,7 @@ always @(posedge clk) begin
             BAST_R:
                 if (bawait[b] == 0) begin
                     bast[b] <= BAST_PRE;
-                    bawait[b] <= (TRP_MIN-(BURST_LENGTH-1)) - 1;
+                    bawait[b] <= (TRP_MIN-(BURST_LENGTH-1)) - 2;
                 end
             BAST_W_CMD: begin
                 bast[b] <= BAST_W_CMD_2;
@@ -280,7 +280,7 @@ always @(posedge clk) begin
             BAST_W_REC:
                 if (bawait[b] == 0) begin
                     bast[b] <= BAST_PRE;
-                    bawait[b] <= (TRP_MIN-TWR_MIN) - 1;
+                    bawait[b] <= TRP_MIN - 2;
                 end
             BAST_PRE:
                 if (bawait[b] == 0) begin
@@ -350,34 +350,26 @@ end
 always @(posedge clk) begin
     reg [CAS_LATENCY+BURST_LENGTH:0] data_ready_delay1, data_ready_delay2, data_ready_delay3;
 
-    reg [12:0] cas_addr;
-    reg [15:0] dq_reg;
-
-
     ch1_ready <= 0;
     ch2_ready <= 0;
     ch3_ready <= 0;
    
-    ch1_reqprocessed <= 0;
-
     refresh_count <= refresh_count+1'b1;
 
     data_ready_delay1 <= data_ready_delay1>>1;
     data_ready_delay2 <= data_ready_delay2>>1;
     data_ready_delay3 <= data_ready_delay3>>1;
 
-    dq_reg <= SDRAM_DQ;
-
-    if(data_ready_delay1[1]) ch1_dout[15:00] <= dq_reg;
-    if(data_ready_delay1[0]) ch1_dout[31:16] <= dq_reg;
+    if(data_ready_delay1[1]) ch1_dout[15:00] <= SDRAM_DQ;
+    if(data_ready_delay1[0]) ch1_dout[31:16] <= SDRAM_DQ;
     if(data_ready_delay1[0]) ch1_ready <= 1;
 
-    if(data_ready_delay2[1]) ch2_dout[15:00] <= dq_reg;
-    if(data_ready_delay2[0]) ch2_dout[31:16] <= dq_reg;
+    if(data_ready_delay2[1]) ch2_dout[15:00] <= SDRAM_DQ;
+    if(data_ready_delay2[0]) ch2_dout[31:16] <= SDRAM_DQ;
     if(data_ready_delay2[0]) ch2_ready <= 1;
 
-    if(data_ready_delay3[1]) ch3_dout[15:00] <= dq_reg;
-    if(data_ready_delay3[0]) ch3_dout[31:16] <= dq_reg;
+    if(data_ready_delay3[1]) ch3_dout[15:00] <= SDRAM_DQ;
+    if(data_ready_delay3[0]) ch3_dout[31:16] <= SDRAM_DQ;
     if(data_ready_delay3[0]) ch3_ready <= 1;
 
     dqout <= 16'bZ;
@@ -390,55 +382,53 @@ always @(posedge clk) begin
             SDRAM_BA      <= 0;
 
             // All the commands during the startup are NOPS, except these
-            if (refresh_count == startup_refresh_max-63) begin
+            if (refresh_count == startup_pchg_cnt) begin
                 // ensure all rows are closed
                 command     <= CMD_PRECHARGE;
                 SDRAM_A[10] <= 1;  // all banks
                 SDRAM_BA    <= 2'b00;
             end
-            if (refresh_count == startup_refresh_max-55) begin
-                // these refreshes need to be at least tREF (66ns) apart
+            if (refresh_count == startup_ref1_cnt) begin
+                // these refreshes need to be at least tRC apart
                 command     <= CMD_AUTO_REFRESH;
             end
-            if (refresh_count == startup_refresh_max-47) begin
+            if (refresh_count == startup_ref2_cnt) begin
                 command     <= CMD_AUTO_REFRESH;
             end
-            if (refresh_count == startup_refresh_max-39) begin
+            if (refresh_count == startup_pchg_cnt) begin
                 // Now load the mode register
                 command     <= CMD_LOAD_MODE;
                 SDRAM_A     <= MODE;
             end
 
             if (!refresh_count) begin
-                state   <= STATE_IDLE;
+                state   <= STATE_ACTIVE;
                 refresh_count <= 0;
             end
         end
 
-        STATE_IDLE_5: state <= STATE_IDLE_4;
-        STATE_IDLE_4: state <= STATE_IDLE_3;
-        STATE_IDLE_3: state <= STATE_IDLE_2;
-        STATE_IDLE_2: state <= STATE_IDLE_1;
-        STATE_IDLE_1: begin
-            state      <= STATE_IDLE;
+        STATE_REFRESH: begin
             // mask possible refresh to reduce colliding.
-            if (refresh_count > cycles_per_refresh) begin
-                //------------------------------------------------------------------------
-                //-- Start the refresh cycle. 
-                //-- This tasks tRFC (66ns), so 7 idle cycles are needed @ 120MHz
-                //------------------------------------------------------------------------
-                state    <= STATE_IDLE_5;
+            if (refresh_wait == TRC_MIN) begin
+                // Start the refresh cycle.
                 command  <= CMD_AUTO_REFRESH;
                 refresh_count <= refresh_count - cycles_per_refresh + 1'd1;
+                refresh_wait <= refresh_wait - 1'd1;
+            end
+            else begin
+                refresh_wait <= refresh_wait - 1'd1;
+                if (refresh_wait - 1'd1 == 0)
+                    state <= STATE_ACTIVE;
             end
         end
 
-        STATE_IDLE: begin
+        STATE_ACTIVE: begin
             case (bbsst)
                 BAST_IDLE:
                     if (baidle && refresh_count > cycles_per_refresh) begin
                         // Priority is to issue a refresh if one is outstanding
-                        state <= STATE_IDLE_1;
+                        state <= STATE_REFRESH;
+                        refresh_wait <= TRC_MIN;
                     end
                 BAST_ACT: begin
                     SDRAM_BA   <= bbsba;
@@ -451,9 +441,9 @@ always @(posedge clk) begin
                     SDRAM_A[10]    <= 1; // auto-precharge
                     SDRAM_A[9:0]   <= bacol[bbsba];
                     command <= CMD_READ;
-                    if(bbsba == 0)      data_ready_delay1[CAS_LATENCY+BURST_LENGTH] <= 1;
-                    else if(bbsba == 1) data_ready_delay2[CAS_LATENCY+BURST_LENGTH] <= 1;
-                    else                data_ready_delay3[CAS_LATENCY+BURST_LENGTH] <= 1;
+                    if(bbsba == 0)      data_ready_delay1[CAS_LATENCY+BURST_LENGTH-1] <= 1;
+                    else if(bbsba == 1) data_ready_delay2[CAS_LATENCY+BURST_LENGTH-1] <= 1;
+                    else                data_ready_delay3[CAS_LATENCY+BURST_LENGTH-1] <= 1;
                 end
                 BAST_R_DQM: begin
                     SDRAM_A[12:11] <= 0; // DQM for 2nd beat
@@ -523,7 +513,7 @@ assign {SDRAM_DQMH,SDRAM_DQML} = SDRAM_A[12:11];
 //);
 
 function [1:0] addr_to_bank(input [26:0] a);
-    addr_to_bank = a[24:23];
+    addr_to_bank = a[25:24];
 endfunction
 
 function [12:0] addr_to_row(input [26:0] a);
@@ -531,7 +521,7 @@ function [12:0] addr_to_row(input [26:0] a);
 endfunction
 
 function [9:0] addr_to_col(input [26:0] a);
-    addr_to_col = {a[25], a[9:1]};
+    addr_to_col = {a[23], a[9:1]};
 endfunction
 
 endmodule
