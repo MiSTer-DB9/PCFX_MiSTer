@@ -8,6 +8,11 @@
 //
 // This program is GPL licensed. See COPYING for the full license.
 
+// TODO:
+// - Enforce refresh cycle timing
+// - Enforce DQ contention avoidance timing
+// - Command interrupt
+
 module as4c32m16sb
     #(parameter CLK_MHZ = 142.8571428)
     (
@@ -190,6 +195,10 @@ always @(posedge CLK) if (cke) begin
         rd_cnt <= rd_cnt - 1;
         bc <= bc + 1'd1;
     end
+    else if (wr_cnt != 0) begin
+        wr_cnt <= wr_cnt - 1;
+        bc <= bc + 1'd1;
+    end
 
     if (((rd_cnt - 1 == 0) || (wr_cnt - 1 == 0)) && prechg[bank]) begin
         assert(tras_cnt[bank] >= tras_min);
@@ -283,8 +292,6 @@ always @(posedge CLK) if (cke) begin
             mem[bank][row[bank]][col[bank]][15:8] <= wr_din[15:8];
         if (dqmn[0])
             mem[bank][row[bank]][col[bank]][7:0] <= wr_din[7:0];
-        bc <= bc + 1'd1;
-        wr_cnt <= wr_cnt - 1;
     end
 end
 
