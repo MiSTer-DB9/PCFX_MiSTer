@@ -19,6 +19,8 @@
 // You should have received a copy of the GNU General Public License 
 // along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+// TODO: Handle CAS_LATENCY == 3
+
 module sdram
     #(parameter CLK_MHZ = 142.8571428)
 (
@@ -113,17 +115,53 @@ localparam BAST_W_CMD_2  = 7;
 localparam BAST_W_REC    = 8;
 localparam BAST_PRE      = 9;
 
-reg [3:0]  bast [4];
-reg [3:0]  bacnt [4];
+reg [3:0]  barq, barq_d; // access request
+reg [3:0]  barnw; // read / not write
+reg [11:0] barow [4]; // row address
+reg [9:0]  bacol [4]; // column address
+reg [31:0] badin [4]; // data to write
+reg [3:0]  babe [4]; // byte enables
+reg [3:0]  bast [4]; // bank current status
+reg [3:0]  bawait [4]; // wait counter
+// bacreq, badreq are bitmaps of future bus cycles required, LSB first
+reg [3:0]  bacreq [4]; // cmd bus cycle request bitmap
+reg [3:0]  badreq [4]; // data bus cycle request bitmap
 
 wire [3:0] bast0 = bast[0];
 wire [3:0] bast1 = bast[1];
 wire [3:0] bast2 = bast[2];
-wire [3:0] bast3 = bast[3];
+//wire [3:0] bast3 = bast[3];
 
-// Bus Priority Encoder STate
-reg [3:0]  bpest; // state
-reg [1:0]  bpeba; // bank
+wire [3:0] bawait0 = bawait[0];
+wire [3:0] bawait1 = bawait[1];
+wire [3:0] bawait2 = bawait[2];
+//wire [3:0] bawait3 = bawait[3];
+
+wire [3:0] bacreq0 = bacreq[0];
+wire [3:0] bacreq1 = bacreq[1];
+wire [3:0] bacreq2 = bacreq[2];
+//wire [3:0] bacreq3 = bacreq[3];
+
+wire [3:0] badreq0 = badreq[0];
+wire [3:0] badreq1 = badreq[1];
+wire [3:0] badreq2 = badreq[2];
+//wire [3:0] badreq3 = badreq[3];
+
+// Bus Bank Scheduler
+reg [3:0]  bbsst; // state
+reg [1:0]  bbsba; // current bank
+reg [1:0]  bbsba_d; // last bank
+reg [3:0]  bbscact; // cmd bus cycle activity bitmap
+reg [3:0]  bbsdact; // data bus cycle activity bitmap
+reg        bbsschn; // bank was newly scheduled
+reg [3:0]  bbsschban; // the newly scheduled bank
+reg [3:0]  bbsschv; // schedule filled
+reg [1:0]  bbsschba [4]; // bank schedule
+
+wire [1:0] bbsschba0 = bbsschba[0];
+wire [1:0] bbsschba1 = bbsschba[1];
+wire [1:0] bbsschba2 = bbsschba[2];
+wire [1:0] bbsschba3 = bbsschba[3];
 
 localparam STATE_STARTUP = 0;
 localparam STATE_WAIT    = 1;
@@ -136,98 +174,185 @@ localparam STATE_IDLE_3  = 7;
 localparam STATE_IDLE_4  = 8;
 localparam STATE_IDLE_5  = 9;
 
-reg        ch1_rq, ch2_rq, ch3_rq;
+reg  [3:0] state = STATE_STARTUP;
 
-/* -----\/----- EXCLUDED -----\/-----
-always @* begin
-reg done;
+// Channel to bank connection
+assign barq[0] = (barq_d[0] & ~ch1_ready) | ch1_req;
+assign barq[1] = (barq_d[1] & ~ch2_ready) | ch2_req;
+assign barq[2] = (barq_d[2] & ~ch3_ready) | ch3_req;
+assign barq[3] = 0;
 
-    done = 0;
-    bpest = BAST_IDLE;
-    bpeba = 0;
-
-    for (int b = 0; b < 4; b++) begin
-        if (!done)
-            case (bast[b])
-                BAST_IDLE: begin
-                    if (b == 0 && (ch1_rq | ch1_req)) begin
-                        bpest = BAST_ACT;
-                        bpeba = b;
-                    end
-                end
-            endcase
-    end
-end
- -----/\----- EXCLUDED -----/\----- */
-// TODO
-assign bpest = bast[0];
-assign bpeba = 0;
-
-
+initial
+    barq_d = 0;
 always @(posedge clk) begin
+    if (init)
+        barq_d <= 0;
+    else
+        barq_d <= barq;
+end
+
+assign barnw[0] = ch1_rnw;
+assign barnw[1] = ch2_rnw;
+assign barnw[2] = ch3_rnw;
+
+assign barow[0] = addr_to_row(ch1_addr);
+assign barow[1] = addr_to_row(ch2_addr);
+assign barow[2] = addr_to_row(ch3_addr);
+
+assign bacol[0] = addr_to_col(ch1_addr);
+assign bacol[1] = addr_to_col(ch2_addr);
+assign bacol[2] = addr_to_col(ch3_addr);
+
+assign badin[0] = ch1_din;
+assign badin[1] = ch2_din;
+assign badin[2] = ch3_din;
+
+assign babe[0] = ch1_be;
+assign babe[1] = 4'b0011;
+assign babe[2] = 4'b0011;
+
+wire bapause = state != STATE_IDLE || refresh_count > cycles_per_refresh;
+wire baidle = (bast[0] == BAST_IDLE && bast[1] == BAST_IDLE &&
+               bast[2] == BAST_IDLE && bast[3] == BAST_IDLE);
+
+// Bank bus cycle request bitmap generator
+always @* begin
     for (int b = 0; b < 4; b++) begin
+        bacreq[b] = 0;
+        badreq[b] = 0;
+
         case (bast[b])
             BAST_IDLE: begin
-                if (b == 0 && (ch1_rq | ch1_req))
-                    bast[b] <= BAST_ACT;
+                if (~bapause && barq[b]) begin
+                    bacreq[b] = 4'b1;
+                end
             end
-            BAST_ACT:
-                if (bpeba == b) begin
-                    bast[b] <= BAST_ACT_WAIT;
-                    bacnt[b] <= TRCD_MIN - 2;
-                end
             BAST_ACT_WAIT:
-                if (bacnt[b] == 0) begin
-                    bast[b] <= ch1_rnw ? BAST_R_CMD : BAST_W_CMD;
+                if (bawait[b] == 0) begin
+                    bacreq[b] = (1<<BURST_LENGTH)-1;
+                    badreq[b] = (1<<BURST_LENGTH)-1 << (barnw[b] ? 2 : 0);
                 end
-            BAST_R_CMD:
-                if (bpeba == b)
-                    bast[b] <= BAST_R_DQM;
+            default: ;
+        endcase
+    end
+end
+
+// Bank FSM
+always @(posedge clk) begin
+    for (int b = 0; b < 4; b++) begin
+        if (bawait[b] != 0)
+            bawait[b] <= bawait[b] - 1'd1;
+
+        case (bast[b])
+            BAST_IDLE: if (bbsba == b) begin
+                if (~bapause && barq[b]) begin
+                    bast[b] <= BAST_ACT;
+                end
+            end
+            BAST_ACT: begin
+                bast[b] <= BAST_ACT_WAIT;
+                bawait[b] <= TRCD_MIN - 2;
+            end
+            BAST_ACT_WAIT: if (bbsba == b) begin
+                if (bawait[b] == 0) begin
+                    bast[b] <= barnw[b] ? BAST_R_CMD : BAST_W_CMD;
+                end
+            end
+            BAST_R_CMD: begin
+                bast[b] <= BAST_R_DQM;
+            end
             BAST_R_DQM: begin
                 bast[b] <= BAST_R;
-                bacnt[b] <= BURST_LENGTH - 1;
+                bawait[b] <= BURST_LENGTH - 1;
             end
             BAST_R:
-                if (bacnt[b] == 0) begin
+                if (bawait[b] == 0) begin
                     bast[b] <= BAST_PRE;
-                    bacnt[b] <= (TRP_MIN-(BURST_LENGTH-1)) - 1;
+                    bawait[b] <= (TRP_MIN-(BURST_LENGTH-1)) - 1;
                 end
-            BAST_W_CMD:
-                if (bpeba == b)
-                    bast[b] <= BAST_W_CMD_2;
+            BAST_W_CMD: begin
+                bast[b] <= BAST_W_CMD_2;
+            end
             BAST_W_CMD_2: begin
                 bast[b] <= BAST_W_REC;
-                bacnt[b] <= TWR_MIN - 1;
+                bawait[b] <= TWR_MIN - 1;
             end
             BAST_W_REC:
-                if (bacnt[b] == 0) begin
+                if (bawait[b] == 0) begin
                     bast[b] <= BAST_PRE;
-                    bacnt[b] <= (TRP_MIN-TWR_MIN) - 1;
+                    bawait[b] <= (TRP_MIN-TWR_MIN) - 1;
                 end
             BAST_PRE:
-                if (bacnt[b] == 0) begin
+                if (bawait[b] == 0) begin
                     bast[b] <= BAST_IDLE;
                 end
         endcase
     end
 end
 
+// Bus bank scheduler
+always @* begin
+    bbsba = bbsba_d;
+    bbsschn = 0;
+    bbsschban = 0;
+
+    if (bbsschv[0]) begin
+        // Select previously scheduled bank
+        bbsba = bbsschba[0];
+    end
+    else begin
+        // Nothing scheduled yet. Any volunteers?
+        for (int b = 3; b >= 0; b--) begin
+            if (bbsschn == 0) begin
+                bbsschban = b;
+
+                if ((bacreq[b] | badreq[b]) &
+                    ~|(bacreq[b] & bbscact) & ~|(badreq[b] & bbsdact))
+                    bbsschn = 1;
+            end
+        end
+        if (bbsschn)
+            // Select newly scheduled bank
+            bbsba = bbsschban;
+    end
+end
+
+initial
+    bbsba_d = 0;
+
+always @(posedge clk) begin
+    bbsba_d <= bbsba;
+
+    for (int i = 0; i < $size(bbsschv); i++) begin
+        if (i < $size(bbsschv) - 1) begin
+            bbsschv[i] <= bbsschv[i+1];
+            bbsschba[i] <= bbsschba[i+1];
+        end
+        else begin
+            bbsschv[i] <= 0;
+            bbsschba[i] <= 0;
+        end
+
+        if (bbsschn & bacreq[bbsschban][i]) begin
+            bbsschv[i] <= 1;
+            bbsschba[i] <= bbsschban;
+        end
+    end
+end
+
+assign bbsst = bast[bbsba];
+
+always @(posedge clk) begin
+    bbscact <= {1'b0, bbscact[$left(bbscact):1]} | bacreq[bbsba];
+    bbsdact <= {1'b0, bbsdact[$left(bbsdact):1]} | badreq[bbsba];
+end
+
 always @(posedge clk) begin
     reg [CAS_LATENCY+BURST_LENGTH:0] data_ready_delay1, data_ready_delay2, data_ready_delay3;
 
     reg [12:0] cas_addr;
-    reg [31:0] saved_data;
-    reg  [3:0] saved_be;
     reg [15:0] dq_reg;
-    reg  [3:0] state = STATE_STARTUP;
 
-    reg [1:0] ch;
-
-    
-
-    ch1_rq <= ch1_rq | ch1_req;
-    ch2_rq <= ch2_rq | ch2_req;
-    ch3_rq <= ch3_rq | ch3_req;
 
     ch1_ready <= 0;
     ch2_ready <= 0;
@@ -309,61 +434,50 @@ always @(posedge clk) begin
         end
 
         STATE_IDLE: begin
-            if (0)
-                ;
-            else begin
-                for (int b = 0; b < 4; b++) begin
-                    if (bacnt[b] != 0)
-                        bacnt[b] <= bacnt[b] - 1'd1;
+            case (bbsst)
+                BAST_IDLE:
+                    if (baidle && refresh_count > cycles_per_refresh) begin
+                        // Priority is to issue a refresh if one is outstanding
+                        state <= STATE_IDLE_1;
+                    end
+                BAST_ACT: begin
+                    SDRAM_BA   <= bbsba;
+                    SDRAM_A    <= barow[bbsba];
+                    command    <= CMD_ACTIVE;
                 end
-
-                case (bpest)
-                    BAST_IDLE:
-                        if (refresh_count > cycles_per_refresh) begin
-                            // Priority is to issue a refresh if one is outstanding
-                            state <= STATE_IDLE_1;
-                        end
-                    BAST_ACT: begin
-                        if (~ch1_rnw) begin
-                            {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {~ch1_be[1:0], 1'b1, ch1_addr[25:1]};
-                        end else begin
-                            {cas_addr[12:9],SDRAM_BA,SDRAM_A,cas_addr[8:0]} <= {2'b00, 1'b1, ch1_addr[25:1]};
-                        end
-                        SDRAM_BA   <= bpeba;
-                        saved_data <= ch1_din;
-                        saved_be   <= ch1_be;
-                        ch         <= 0;
-                        ch1_rq     <= 0;
-                        command    <= CMD_ACTIVE;
-                    end
-                    BAST_R_CMD: begin                    
-                        SDRAM_A <= cas_addr;
-                        command <= CMD_READ;
-                        if(ch == 0) data_ready_delay1[CAS_LATENCY+BURST_LENGTH] <= 1;
-                        else if(ch == 1) data_ready_delay2[CAS_LATENCY+BURST_LENGTH] <= 1;
-                        else             data_ready_delay3[CAS_LATENCY+BURST_LENGTH] <= 1;
-                    end
-                    BAST_R_DQM: begin
-                        SDRAM_A[12:11] <= 0; // DQM
-                    end
-                    BAST_W_CMD: begin
-                        SDRAM_A <= cas_addr;
-                        command <= CMD_WRITE;
-                        dqout   <= saved_data[15:0];
-                    end
-                    BAST_W_CMD_2: begin
-                        SDRAM_A[10]    <= 1;
-                        SDRAM_A[0]     <= 1;
-                        command        <= CMD_WRITE;
-                        dqout          <= saved_data[31:16];
-                        SDRAM_A[12:11] <= ~saved_be[3:2]; // DQM
-                        if(ch == 0)      ch1_ready <= 1;
-                        else if(ch == 1) ch2_ready <= 1;
-                        else             ch3_ready <= 1;
-                    end
-                    default: ;
-                endcase
-            end
+                BAST_R_CMD: begin
+                    SDRAM_BA       <= bbsba;
+                    SDRAM_A[12:11] <= 0; // DQM for 1st beat
+                    SDRAM_A[10]    <= 1; // auto-precharge
+                    SDRAM_A[9:0]   <= bacol[bbsba];
+                    command <= CMD_READ;
+                    if(bbsba == 0)      data_ready_delay1[CAS_LATENCY+BURST_LENGTH] <= 1;
+                    else if(bbsba == 1) data_ready_delay2[CAS_LATENCY+BURST_LENGTH] <= 1;
+                    else                data_ready_delay3[CAS_LATENCY+BURST_LENGTH] <= 1;
+                end
+                BAST_R_DQM: begin
+                    SDRAM_A[12:11] <= 0; // DQM for 2nd beat
+                end
+                BAST_W_CMD: begin
+                    SDRAM_BA       <= bbsba;
+                    SDRAM_A[12:11] <= ~babe[bbsba][1:0]; // DQM for 1st beat
+                    SDRAM_A[10]    <= 0; // no auto-precharge
+                    SDRAM_A[9:0]   <= bacol[bbsba];
+                    command <= CMD_WRITE;
+                    dqout   <= badin[bbsba][15:0];
+                end
+                BAST_W_CMD_2: begin
+                    SDRAM_A[12:11] <= ~babe[bbsba][3:2]; // DQM for 2nd beat
+                    SDRAM_A[10]    <= 1; // auto-precharge
+                    SDRAM_A[0]     <= 1;
+                    command        <= CMD_WRITE;
+                    dqout          <= badin[bbsba][31:16];
+                    if(bbsba == 0)      ch1_ready <= 1;
+                    else if(bbsba == 1) ch2_ready <= 1;
+                    else                ch3_ready <= 1;
+                end
+                default: ;
+            endcase
         end
     endcase
 

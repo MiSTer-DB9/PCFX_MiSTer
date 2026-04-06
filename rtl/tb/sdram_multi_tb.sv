@@ -108,10 +108,14 @@ assign SDRAM_CLK = clk_ram;
 
 event           krama_read, kramb_read, cpu_read, cpu_write;
 
+localparam [26:0] ch1_addr0 = 27'h0000000;
+localparam [26:0] ch2_addr0 = 27'h0800000;
+localparam [26:0] ch3_addr0 = 27'h1000000;
+
 initial begin
-    ch1_addr = 27'h00000;
-    ch2_addr = 27'h10000;
-    ch3_addr = 27'h20000;
+    ch1_addr = ch1_addr0;
+    ch2_addr = ch2_addr0;
+    ch3_addr = ch3_addr0;
     ch1_req = 0;
     ch2_req = 0;
     ch3_req = 0;
@@ -120,12 +124,12 @@ end
 
 always @(krama_read) begin :krama_read_blk
 reg [15:0] d;
-    sdram_read(ch2_addr, d);
     ch2_addr <= ch2_addr + 2'd2;
     ch2_rnw <= 1;
     ch2_req <= 1;
     @(posedge clk_ram) ch2_req <= 0;
-    @(negedge ~ch2_ready) ;
+    @(negedge ch2_ready) ;
+    sdram_read(ch2_addr, d);
     assert(ch2_dout[15:0] == d);
 end
 
@@ -135,13 +139,16 @@ reg [15:0] d;
     ch3_rnw <= 1;
     ch3_req <= 1;
     @(posedge clk_ram) ch3_req <= 0;
-    @(negedge ~ch3_ready) ;
+    @(negedge ch3_ready) ;
     sdram_read(ch3_addr, d);
     assert(ch3_dout[15:0] == d);
 end
 
+bit cpu_busy_read, cpu_busy_write = 0;
+
 always @(cpu_read) begin :cpu_read_blk
 reg [31:0] d;
+    cpu_busy_read <= 1;
     ch1_addr <= ch1_addr + 3'd4;
     ch1_rnw <= 1;
     ch1_req <= 1;
@@ -150,10 +157,12 @@ reg [31:0] d;
     sdram_read(ch1_addr, d[15:0]);
     sdram_read(ch1_addr+2, d[31:16]);
     assert(ch1_dout == d);
+    cpu_busy_read <= 0;
 end
 
 always @(cpu_write) begin :cpu_write_blk
 reg [31:0] d;
+    cpu_busy_write <= 1;
     ch1_din <= ~ch1_dout;
     ch1_rnw <= 0;
     ch1_req <= 1;
@@ -163,6 +172,7 @@ reg [31:0] d;
     sdram_read(ch1_addr, d[15:0]);
     sdram_read(ch1_addr+2, d[31:16]);
     assert(d == ch1_din);
+    cpu_busy_write <= 0;
 end
 
 //////////////////////////////////////////////////////////////////////
@@ -187,11 +197,17 @@ always @(posedge clk_ram)
         sdram_init <= 0;
 
 task load_sdram;
-    for (bit [26:0] a = 0; a < 27'h30000; a ++)
-        sdram_write(a, a[15:0] | {a[19:16], 12'b0});
+    for (bit [26:0] a = ch1_addr0; a < ch1_addr0 + 27'h10000; a ++)
+        sdram_write(a, a[15:0] | {a[24:23], 12'b0});
+    for (bit [26:0] a = ch2_addr0; a < ch2_addr0 + 27'h10000; a ++)
+        sdram_write(a, a[15:0] | {a[24:23], 12'b0});
+    for (bit [26:0] a = ch3_addr0; a < ch3_addr0 + 27'h10000; a ++)
+        sdram_write(a, a[15:0] | {a[24:23], 12'b0});
 endtask
 
 initial #0 begin
+static bit exit = 0;
+
     load_sdram();
 
     #150 ; // wait for sdram init.
@@ -201,19 +217,22 @@ initial #0 begin
 
     fork
         begin
-            repeat (40) begin
+            repeat (1000) begin
                 -> krama_read;
                 -> kramb_read;
                 repeat (10) @(posedge clk_sys) ;
             end
+            exit = 1;
         end
         begin
             repeat (30) @(posedge clk_sys) ;
-            repeat (10) begin
+            while (!exit) begin
                 -> cpu_read;
                 repeat (16) @(posedge clk_sys) ;
+                while (cpu_busy_read) @(posedge clk_sys) ;
                 -> cpu_write;
                 repeat (16) @(posedge clk_sys) ;
+                while (cpu_busy_write) @(posedge clk_sys) ;
             end
         end
     join

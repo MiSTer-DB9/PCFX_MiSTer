@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v3.4.0 (w)1999-2022 BSI
-[*] Sun Apr  5 19:19:17 2026
+[*] Mon Apr  6 02:58:16 2026
 [*]
 [dumpfile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/sdram_multi_tb.vcd"
-[dumpfile_mtime] "Sun Apr  5 19:18:52 2026"
-[dumpfile_size] 1204734
+[dumpfile_mtime] "Mon Apr  6 02:45:01 2026"
+[dumpfile_size] 9524130
 [savefile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/sdram_multi_tb.gtkw"
-[timestart] 150675
+[timestart] 186506
 [size] 1333 600
 [pos] -1 -1
-*-7.276820 150900 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+*-7.387208 186840 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 [markername] AA
 [markername] BB
 [markername] CC
@@ -43,6 +43,71 @@
 [signals_width] 261
 [sst_expanded] 1
 [sst_vpaned_height] 159
+@28
+sdram_multi_tb.sdram.init
+@22
+sdram_multi_tb.sdram.refresh_count[13:0]
+sdram_multi_tb.sdram.ch1_addr[26:0]
+sdram_multi_tb.sdram.ch1_din[31:0]
+sdram_multi_tb.sdram.ch1_dout[31:0]
+@28
+sdram_multi_tb.sdram.ch1_rnw
+sdram_multi_tb.sdram.ch1_req
+sdram_multi_tb.sdram.ch1_ready
+@22
+sdram_multi_tb.sdram.ch2_addr[26:0]
+sdram_multi_tb.sdram.ch2_dout[31:0]
+@29
+sdram_multi_tb.sdram.ch2_req
+@28
+sdram_multi_tb.sdram.ch2_ready
+@22
+sdram_multi_tb.sdram.ch3_addr[26:0]
+sdram_multi_tb.sdram.ch3_dout[31:0]
+@28
+sdram_multi_tb.sdram.ch3_req
+sdram_multi_tb.sdram.ch3_ready
+@800022
+sdram_multi_tb.sdram.barq[3:0]
+@28
+(0)sdram_multi_tb.sdram.barq[3:0]
+(1)sdram_multi_tb.sdram.barq[3:0]
+(2)sdram_multi_tb.sdram.barq[3:0]
+(3)sdram_multi_tb.sdram.barq[3:0]
+@1001200
+-group_end
+@22
+sdram_multi_tb.sdram.bacreq0[3:0]
+sdram_multi_tb.sdram.badreq0[3:0]
+@24
+sdram_multi_tb.sdram.bast0[3:0]
+@22
+sdram_multi_tb.sdram.bawait0[3:0]
+sdram_multi_tb.sdram.bacreq1[3:0]
+sdram_multi_tb.sdram.badreq1[3:0]
+sdram_multi_tb.sdram.bast1[3:0]
+sdram_multi_tb.sdram.bawait1[3:0]
+sdram_multi_tb.sdram.bacreq2[3:0]
+sdram_multi_tb.sdram.badreq2[3:0]
+sdram_multi_tb.sdram.bast2[3:0]
+sdram_multi_tb.sdram.bawait2[3:0]
+@24
+sdram_multi_tb.sdram.bbsba[1:0]
+@22
+sdram_multi_tb.sdram.bbsst[3:0]
+sdram_multi_tb.sdram.bbscact[3:0]
+sdram_multi_tb.sdram.bbsdact[3:0]
+@28
+sdram_multi_tb.sdram.bbsschn
+@24
+sdram_multi_tb.sdram.bbsschban[3:0]
+@22
+sdram_multi_tb.sdram.bbsschv[3:0]
+@24
+sdram_multi_tb.sdram.bbsschba0[1:0]
+sdram_multi_tb.sdram.bbsschba1[1:0]
+sdram_multi_tb.sdram.bbsschba2[1:0]
+sdram_multi_tb.sdram.bbsschba3[1:0]
 @800200
 -u1a
 @22
@@ -55,7 +120,7 @@ sdram_multi_tb.sdrb.u1a.nCAS
 sdram_multi_tb.sdrb.u1a.nWE
 sdram_multi_tb.sdrb.u1a.DQML
 sdram_multi_tb.sdrb.u1a.DQMH
-@23
+@22
 sdram_multi_tb.sdrb.u1a.DQ[15:0]
 @28
 sdram_multi_tb.sdrb.u1a.cmd[3:0]
@@ -73,34 +138,9 @@ sdram_multi_tb.sdrb.u1a.row_open[3:0]
 sdram_multi_tb.sdrb.u1a.rd_cnt
 @28
 sdram_multi_tb.sdrb.u1a.auto_refresh
+@22
+sdram_multi_tb.sdrb.u1a.wr_din[15:0]
 @1000200
 -u1a
-@28
-sdram_multi_tb.sdram.init
-@22
-sdram_multi_tb.sdram.refresh_count[13:0]
-@24
-sdram_multi_tb.sdram.bpest[3:0]
-sdram_multi_tb.sdram.bast0[3:0]
-@22
-sdram_multi_tb.sdram.ch1_addr[26:0]
-sdram_multi_tb.sdram.ch1_din[31:0]
-sdram_multi_tb.sdram.ch1_dout[31:0]
-@28
-sdram_multi_tb.sdram.ch1_rnw
-sdram_multi_tb.sdram.ch1_req
-sdram_multi_tb.sdram.ch1_ready
-@22
-sdram_multi_tb.sdram.ch2_addr[26:0]
-sdram_multi_tb.sdram.ch2_dout[31:0]
-@28
-sdram_multi_tb.sdram.ch2_req
-sdram_multi_tb.sdram.ch2_ready
-@22
-sdram_multi_tb.sdram.ch3_addr[26:0]
-sdram_multi_tb.sdram.ch3_dout[31:0]
-@28
-sdram_multi_tb.sdram.ch3_req
-sdram_multi_tb.sdram.ch3_ready
 [pattern_trace] 1
 [pattern_trace] 0
