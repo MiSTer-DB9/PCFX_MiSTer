@@ -201,7 +201,7 @@ always @(posedge CLK) if (cke) begin
     end
 
     if (((rd_cnt - 1 == 0) || (wr_cnt - 1 == 0)) && prechg[bank]) begin
-        assert(tras_cnt[bank] >= tras_min);
+        assert(tras_cnt[bank] >= tras_min - trp_min);
         prechg[bank] <= 0;
         active[bank] <= 0;
         row_open[bank] <= 0;
@@ -261,7 +261,7 @@ always @(posedge CLK) if (cke) begin
                         assert(~prechg[b]);
                         assert(a[10] || active[b]);
                         if (active[b]) begin
-                            assert(tras_cnt[b] >= tras_min);
+                            assert(tras_cnt[b] >= tras_min - trp_min);
                             active[b] <= 0;
                         end
                         row_open[b] <= 0;

@@ -153,6 +153,49 @@ task power_up;
     intertest_pause();
 endtask
 
+task test_read_auto_tras_min;
+    // This only works when BURST_LENGTH == 1.
+    repeat (2) begin
+        // Activate one bank
+        ba <= 0;
+        a <= 0;
+        cmd(CMD_ACTIVE, trcd_min);
+
+        // Read w/ pre-charge
+        a[11] <= 0;
+        a[10] <= 1; // auto-precharge
+        a[9:0] <= 0;
+        cmd(CMD_READ, tras_min - trcd_min);
+
+        cmd(CMD_NOP, trc_min - tras_min);
+    end
+
+    intertest_pause();
+endtask
+
+task test_read_tras_min;
+    // This only works when BURST_LENGTH == 1.
+    repeat (2) begin
+        // Activate one bank
+        ba <= 0;
+        a <= 0;
+        cmd(CMD_ACTIVE, trcd_min);
+
+        // Read
+        a[11] <= 0;
+        a[10] <= 0; // no auto-precharge
+        a[9:0] <= 0;
+        cmd(CMD_READ, tras_min - trcd_min);
+
+        // Precharge
+        a <= 0;
+        a[10] <= 0; // one bank
+        cmd(CMD_PRECHARGE, trp_min);
+    end
+
+    intertest_pause();
+endtask
+
 task test_fast_activate;
     // Activate all banks as quickly as possible
     for (int i = 0; i < 4; i++) begin
@@ -275,6 +318,8 @@ end
 initial #0 begin
     power_up();
 
+    test_read_auto_tras_min;
+    test_read_tras_min;
     test_fast_activate;
     test_interleaved_read;
     test_interleaved_write;
