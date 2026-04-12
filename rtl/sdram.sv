@@ -89,9 +89,9 @@ localparam sdram_startup_cycles= 14'd12100;// 100us, plus a little more, @ 100MH
 localparam cycles_per_refresh  = 14'd300;  // (64000*64)/8192-1 Calc'd as (64ms @ 64MHz)/8192 rose
 localparam startup_refresh_max = 14'b11111111111111;
 localparam startup_mode_cnt    = startup_refresh_max - 7;
-localparam startup_ref2_cnt    = startup_mode_cnt - TRC_MIN;
-localparam startup_ref1_cnt    = startup_ref2_cnt - TRC_MIN;
-localparam startup_pchg_cnt    = startup_ref1_cnt - TRP_MIN;
+localparam startup_ref2_cnt    = 14'(startup_mode_cnt - TRC_MIN);
+localparam startup_ref1_cnt    = 14'(startup_ref2_cnt - TRC_MIN);
+localparam startup_pchg_cnt    = 14'(startup_ref1_cnt - TRP_MIN);
 
 // SDRAM commands
 wire [2:0] CMD_NOP             = 3'b111;
@@ -106,6 +106,7 @@ reg [13:0] refresh_count = startup_refresh_max - sdram_startup_cycles;
 reg  [3:0] refresh_wait;
 reg  [2:0] command;
 reg [15:0] dqout;
+reg        dqoe = 0;
 
 // BAnk STate
 localparam BAST_IDLE     = 0;
@@ -121,7 +122,7 @@ localparam BAST_PRE      = 9;
 
 reg [3:0]  barq, barq_d; // access request
 reg [3:0]  barnw; // read / not write
-reg [11:0] barow [4]; // row address
+reg [12:0] barow [4]; // row address
 reg [9:0]  bacol [4]; // column address
 reg [31:0] badin [4]; // data to write
 reg [3:0]  babe [4]; // byte enables
@@ -158,7 +159,7 @@ reg [1:0]  bbsba_d; // last bank
 reg [3:0]  bbscact; // cmd bus cycle activity bitmap
 reg [3:0]  bbsdact; // data bus cycle activity bitmap
 reg        bbsschn; // bank was newly scheduled
-reg [3:0]  bbsschban; // the newly scheduled bank
+reg [1:0]  bbsschban; // the newly scheduled bank
 reg [3:0]  bbsschv; // schedule filled
 reg [1:0]  bbsschba [4]; // bank schedule
 
@@ -244,16 +245,16 @@ always @(posedge clk) begin
             bawait[b] <= bawait[b] - 1'd1;
 
         case (bast[b])
-            BAST_IDLE: if (bbsba == b) begin
+            BAST_IDLE: if (bbsba == b[1:0]) begin
                 if (~bapause && barq[b]) begin
                     bast[b] <= BAST_ACT;
                 end
             end
             BAST_ACT: begin
                 bast[b] <= BAST_ACT_WAIT;
-                bawait[b] <= TRCD_MIN - 2;
+                bawait[b] <= 4'(TRCD_MIN - 2);
             end
-            BAST_ACT_WAIT: if (bbsba == b) begin
+            BAST_ACT_WAIT: if (bbsba == b[1:0]) begin
                 if (bawait[b] == 0) begin
                     bast[b] <= barnw[b] ? BAST_R_CMD : BAST_W_CMD;
                 end
@@ -268,19 +269,19 @@ always @(posedge clk) begin
             BAST_R:
                 if (bawait[b] == 0) begin
                     bast[b] <= BAST_PRE;
-                    bawait[b] <= (TRP_MIN-(BURST_LENGTH-1)) - 2;
+                    bawait[b] <= 4'(TRP_MIN-(BURST_LENGTH-1)) - 2;
                 end
             BAST_W_CMD: begin
                 bast[b] <= BAST_W_CMD_2;
             end
             BAST_W_CMD_2: begin
                 bast[b] <= BAST_W_REC;
-                bawait[b] <= TWR_MIN - 1;
+                bawait[b] <= 4'(TWR_MIN - 1);
             end
             BAST_W_REC:
                 if (bawait[b] == 0) begin
                     bast[b] <= BAST_PRE;
-                    bawait[b] <= TRP_MIN - 2;
+                    bawait[b] <= 4'(TRP_MIN - 2);
                 end
             BAST_PRE:
                 if (bawait[b] == 0) begin
@@ -288,6 +289,11 @@ always @(posedge clk) begin
                 end
         endcase
     end
+end
+
+initial begin
+    for (int i = 0; i < 4; i++)
+        bast[i] = BAST_IDLE;
 end
 
 // Bus bank scheduler
@@ -304,9 +310,9 @@ always @* begin
         // Nothing scheduled yet. Any volunteers?
         for (int b = 3; b >= 0; b--) begin
             if (bbsschn == 0) begin
-                bbsschban = b;
+                bbsschban = b[1:0];
 
-                if ((bacreq[b] | badreq[b]) &
+                if (|(bacreq[b] | badreq[b]) &
                     ~|(bacreq[b] & bbscact) & ~|(badreq[b] & bbsdact))
                     bbsschn = 1;
             end
@@ -347,6 +353,12 @@ always @(posedge clk) begin
     bbsdact <= {1'b0, bbsdact[$left(bbsdact):1]} | badreq[bbsba];
 end
 
+initial begin
+    ch1_ready = 0;
+    ch2_ready = 0;
+    ch3_ready = 0;
+end
+
 always @(posedge clk) begin
     reg [CAS_LATENCY+BURST_LENGTH:0] data_ready_delay1, data_ready_delay2, data_ready_delay3;
 
@@ -372,7 +384,7 @@ always @(posedge clk) begin
     if(data_ready_delay3[0]) ch3_dout[31:16] <= SDRAM_DQ;
     if(data_ready_delay3[0]) ch3_ready <= 1;
 
-    dqout <= 16'bZ;
+    dqoe <= 0;
 
     command <= CMD_NOP;
     SDRAM_A[12:11] <= 2'b11; // DQM
@@ -401,7 +413,7 @@ always @(posedge clk) begin
                 SDRAM_A     <= MODE;
             end
 
-            if (!refresh_count) begin
+            if (refresh_count == 0) begin
                 state   <= STATE_ACTIVE;
                 refresh_count <= 0;
             end
@@ -409,7 +421,7 @@ always @(posedge clk) begin
 
         STATE_REFRESH: begin
             // mask possible refresh to reduce colliding.
-            if (refresh_wait == TRC_MIN) begin
+            if (refresh_wait == 4'(TRC_MIN)) begin
                 // Start the refresh cycle.
                 command  <= CMD_AUTO_REFRESH;
                 refresh_count <= refresh_count - cycles_per_refresh + 1'd1;
@@ -428,7 +440,7 @@ always @(posedge clk) begin
                     if (baidle && refresh_count > cycles_per_refresh) begin
                         // Priority is to issue a refresh if one is outstanding
                         state <= STATE_REFRESH;
-                        refresh_wait <= TRC_MIN;
+                        refresh_wait <= 4'(TRC_MIN);
                     end
                 BAST_ACT: begin
                     SDRAM_BA   <= bbsba;
@@ -455,6 +467,7 @@ always @(posedge clk) begin
                     SDRAM_A[9:0]   <= bacol[bbsba];
                     command <= CMD_WRITE;
                     dqout   <= badin[bbsba][15:0];
+                    dqoe    <= 1;
                 end
                 BAST_W_CMD_2: begin
                     SDRAM_A[12:11] <= ~babe[bbsba][3:2]; // DQM for 2nd beat
@@ -462,6 +475,7 @@ always @(posedge clk) begin
                     SDRAM_A[0]     <= 1;
                     command        <= CMD_WRITE;
                     dqout          <= badin[bbsba][31:16];
+                    dqoe           <= 1;
                     if(bbsba == 0)      ch1_ready <= 1;
                     else if(bbsba == 1) ch2_ready <= 1;
                     else                ch3_ready <= 1;
@@ -479,7 +493,7 @@ always @(posedge clk) begin
     end
 end
 
-assign SDRAM_DQ   = dqout;
+assign SDRAM_DQ   = dqoe ? dqout : 'Z;
 assign SDRAM_nCS  = 0;
 assign SDRAM_nRAS = command[2];
 assign SDRAM_nCAS = command[1];

@@ -7,7 +7,7 @@ dpram.sv
 
 ../pcfx_top.sv
 ../memif_sdram.sv
-../sdram.v
+../sdram.sv
 ../fx_bmp.sv
 
 ../mach.sv

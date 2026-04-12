@@ -17,8 +17,9 @@ import core_pkg::hmi_t;
 
 module pcfx_top_tb;
 
-logic		reset;
-logic       clk_sys, clk_ram;
+logic		reset = 1;
+logic       clk_sys = 1;
+logic       clk_ram = 1;
 
 initial begin
     $timeformat(-6, 0, " us", 1);
@@ -45,6 +46,8 @@ wire        SDRAM_nCS;
 wire        SDRAM_nCAS;
 wire        SDRAM_nRAS;
 wire        SDRAM_nWE;
+
+assign SDRAM_CLK = clk_ram;
 
 sdram_xsds sdrb (.*);
 
@@ -76,7 +79,7 @@ logic       bk_load = 0;
 logic       bk_save = 0;
 logic       bmp_eject_rom = 0;
 
-hmi_t       hmi;
+hmi_t       hmi = '0;
 
 wire        pce;
 wire        hbl, vbl;
@@ -147,14 +150,6 @@ pcfx_top pcfx_top
 	.B(b)
 );
 
-initial begin
-    reset = 1;
-    clk_sys = 1;
-    clk_ram = 1;
-
-    hmi = '0;
-end
-
 initial forever begin :clkgen_sys
     #0.01 clk_sys = ~clk_sys; // 50 MHz
 end
@@ -163,19 +158,20 @@ initial forever begin :clkgen_ram
     #0.005 clk_ram = ~clk_ram; // 100 MHz
 end
 
+initial reset_sys = 1;
 always @(posedge clk_sys)
     reset_sys <= reset;
 
 //////////////////////////////////////////////////////////////////////
 
-task sdram_read(input [24:0] addr, output [15:0] d);
+task sdram_read(input [26:0] addr, output [15:0] d);
     sdrb.u1a.read(pcfx_top.sdram.addr_to_bank(addr),
                   pcfx_top.sdram.addr_to_row(addr),
                   pcfx_top.sdram.addr_to_col(addr),
                   d);
 endtask
 
-task sdram_write(input [24:0] addr, input [15:0] d);
+task sdram_write(input [26:0] addr, input [15:0] d);
     sdrb.u1a.write(pcfx_top.sdram.addr_to_bank(addr),
                    pcfx_top.sdram.addr_to_row(addr),
                    pcfx_top.sdram.addr_to_col(addr),
@@ -249,11 +245,11 @@ endtask
 
 //////////////////////////////////////////////////////////////////////
 
-task load_file(input [24:0] base, input string fn);
+task load_file(input [26:0] base, input string fn);
 integer	fin;
 integer code;
 logic [15:0] data;
-logic [24:0] addr;
+logic [26:0] addr;
     begin
         fin = $fopen(fn, "rb");
         assert(fin != 0) else $error("Unable to open file %s", fn);
@@ -412,7 +408,7 @@ endtask
 
 task verify_bk_load(int vd);
 bit [15:0] dfile, dram;
-bit [24:0] base, addr;
+bit [26:0] base, addr;
 integer code;
     if (sd_size[vd] == 0)
         return;
@@ -425,7 +421,7 @@ integer code;
         dfile = {dfile[7:0], dfile[15:8]}; // $fread is big-endian
         sdram_read(base + addr, dram);
         assert(dfile == dram) else $error("Wanted %x, got %x @ addr. %x", dfile, dram, addr);
-        addr += 25'd2;
+        addr += 27'd2;
     end
 endtask
 
@@ -489,7 +485,7 @@ end
 event running;
 
 initial #0 begin
-    #10 ; // wait for sdram init.
+    #150 ; // wait for sdram init.
 
     load_rombios();
 `ifdef LOAD_BMP_ROM
@@ -516,8 +512,8 @@ end
 
 initial begin
     @(running) ;
-    repeat (4) #(1000e3) ;
-    //#(500e3) ;
+    //repeat (4) #(1000e3) ;
+    #(500e3) ;
 
 `ifdef SAVE_SRAMS
     if (bk_ena) begin

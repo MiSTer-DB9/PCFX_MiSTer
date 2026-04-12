@@ -1,6 +1,6 @@
 // Use external MiSTer SDRAM as memory backing store
 //
-// Copyright (c) 2025 David Hunter
+// Copyright (c) 2025-2026 David Hunter
 //
 // This program is GPL licensed. See COPYING for the full license.
 
@@ -38,17 +38,35 @@ module memif_sdram
     input         BMP_WEn,
     output        BMP_READYn,
 
+    // ROM / RAM loader/saver interface
+	input [26:0]  LS_ADDR,      // byte address
+	input [31:0]  LS_DIN,       // data input from loader
+	input         LS_WE_REQ,    // loader requests write
+	output        LS_WE_ACK,
+	output [31:0] LS_DOUT,      // data output to saver
+	input         LS_RD_REQ,    // saver requests read
+	output        LS_RD_ACK,
+
     input         SDRAM_CLK,
-    output        SDRAM_CLKREF,
-    output [24:0] SDRAM_WADDR,
-    output [31:0] SDRAM_DIN,
-    output [3:0]  SDRAM_BE,
-    output        SDRAM_WE,
-    input         SDRAM_WE_RDY,
-    output        SDRAM_RD,
-    input         SDRAM_RD_RDY,
-    output [24:0] SDRAM_RADDR,
-    input [31:0]  SDRAM_DOUT
+    output [26:0] SDRAM_CH1_ADDR,
+    input [31:0]  SDRAM_CH1_DOUT,
+    output [31:0] SDRAM_CH1_DIN,
+    output        SDRAM_CH1_REQ,
+    output        SDRAM_CH1_RNW,
+    output [3:0]  SDRAM_CH1_BE,
+    input         SDRAM_CH1_READY,
+    output [26:0] SDRAM_CH2_ADDR,
+    input [31:0]  SDRAM_CH2_DOUT,
+    output [31:0] SDRAM_CH2_DIN,
+    output        SDRAM_CH2_REQ,
+    output        SDRAM_CH2_RNW,
+    input         SDRAM_CH2_READY,
+    output [26:0] SDRAM_CH3_ADDR,
+    input [31:0]  SDRAM_CH3_DOUT,
+    output [31:0] SDRAM_CH3_DIN,
+    output        SDRAM_CH3_REQ,
+    output        SDRAM_CH3_RNW,
+    input         SDRAM_CH3_READY
    );
 
 `include "memif_sdram_part.svh"
@@ -58,9 +76,10 @@ module memif_sdram
 // With SDRAM_CLK = 100MHz and CPU_CLK/CE = 25MHz, ROM reads take 4
 // CPU cycles or 2 wait states. Coincidentally, that's the correct
 // timing for PC-FX.
+// TODO: Verify this
 
-logic           ract = '0;
-logic           wact = '0;
+logic           ch1_req, ch1_act;
+logic           ch1_ready, ch1_ready_d = '1;
 
 logic [15:0]    rom_do;
 logic           rom_start_req;
@@ -80,20 +99,33 @@ logic           bmp_readyn = '1;
 
 logic           mem_start_req;
 logic           mem_pend_req = '0;
+logic           mem_req;
+logic           mem_act = '0;
 logic           mem_we;
 logic           mem_rdy;
 logic           mem_readyn;
 
-logic           sdram_clkref;
-logic [24:0]    sdram_waddr;
-logic [31:0]    sdram_din;
-logic [3:0]     sdram_be;
-logic           sdram_we;
-logic           sdram_rd;
-logic [24:0]    sdram_raddr;
+logic           ls_rd_req, ls_we_req, ls_req;
+logic           ls_rd_ack_d = '0, ls_we_ack_d = '0;
+logic           ls_act = '0;
+logic           ls_done;
+logic           ls_sel;
 
-logic           sdram_rd_d = '0;
-logic           sdram_we_d = '0;
+logic [26:0]    sdram_ch1_addr;
+logic [31:0]    sdram_ch1_din;
+logic [3:0]     sdram_ch1_be;
+logic           sdram_ch1_we;
+logic           sdram_ch1_req;
+
+logic           sdram_ch1_req_d = '0;
+
+assign ls_rd_req = LS_RD_REQ ^ ls_rd_ack_d;
+assign ls_we_req = LS_WE_REQ ^ ls_we_ack_d;
+assign ls_req = ~mem_act & (ls_rd_req | ls_we_req);
+assign ls_done = ls_act & SDRAM_CH1_READY;
+assign ls_sel = ls_req | ls_act;
+assign LS_RD_ACK = ls_rd_ack_d ^ ((LS_RD_REQ ^ ls_rd_ack_d) & ls_done);
+assign LS_WE_ACK = ls_we_ack_d ^ ((LS_WE_REQ ^ ls_we_ack_d) & ls_done);
 
 assign rom_start_req = ~CPU_BCYSTn & ~ROM_CEn;
 assign ram_start_req = ~CPU_BCYSTn & ~RAM_CEn;
@@ -101,33 +133,39 @@ assign sram_start_req = ~CPU_BCYSTn & ~SRAM_CEn;
 assign bmp_start_req = ~CPU_BCYSTn & ~BMP_CEn;
 assign mem_start_req = rom_start_req | ram_start_req | sram_start_req | bmp_start_req;
 
+assign mem_req = ~ls_act & ~mem_act & (mem_start_req | mem_pend_req) & mem_readyn;
 assign mem_readyn = rom_readyn & ram_readyn & sram_readyn & bmp_readyn;
 
+assign ch1_req = mem_req | ls_req;
+assign ch1_act = mem_act | ls_act;
+assign ch1_ready = (ch1_ready_d & ~(~ch1_act & ch1_req)) | SDRAM_CH1_READY;
+
 always @(posedge SDRAM_CLK) begin
-    mem_pend_req <= (mem_pend_req | mem_start_req) & ~(~CPU_RESn | ract | wact);
-    sdram_rd_d <= SDRAM_RD;
-    sdram_we_d <= SDRAM_WE;
+    mem_pend_req <= (mem_pend_req | mem_start_req) & ~(~CPU_RESn | mem_act);
+    sdram_ch1_req_d <= SDRAM_CH1_REQ;
+    ch1_ready_d <= ch1_ready;
+
+    if (ls_done) begin
+        ls_rd_ack_d <= LS_RD_ACK;
+        ls_we_ack_d <= LS_WE_ACK;
+    end
 end
 
 always @(posedge SDRAM_CLK) begin
-  if (~CPU_RESn) begin
-      ract <= '0;
-      wact <= '0;
-  end
-  else begin
-      if (sdram_rd_d & ~SDRAM_RD)
-          ract <= '1;
-      else if (ract & SDRAM_RD_RDY & ~mem_readyn)
-          ract <= '0;
+    if (~ch1_act & SDRAM_CH1_REQ) begin
+        if (ls_req)
+            ls_act <= '1;
+        else if (mem_req)
+            mem_act <= '1;
+    end
 
-      if (sdram_we_d & ~SDRAM_WE)
-          wact <= '1;
-      else if (wact & SDRAM_WE_RDY & ~mem_readyn)
-          wact <= '0;
-  end
+    if (mem_act & (~CPU_RESn | (ch1_ready & ~mem_readyn)))
+        mem_act <= '0;
+    if (ls_act & ls_done)
+        ls_act <= '0;
 end
 
-assign mem_rdy = (ract & SDRAM_RD_RDY) | (wact & SDRAM_WE_RDY);
+assign mem_rdy = mem_act & ch1_ready;
 
 always @(posedge CPU_CLK) if (CPU_CE) begin
     rom_readyn <= ROM_CEn | ~mem_rdy;
@@ -136,14 +174,16 @@ always @(posedge CPU_CLK) if (CPU_CE) begin
     bmp_readyn <= BMP_CEn | ~mem_rdy;
 end
 
-// SDRAM_DOUT is in the SDRAM_CLK domain. Latching into the CPU_CLK
+// SDRAM_CH1_DOUT is in the SDRAM_CLK domain. Latching into the CPU_CLK
 // domain helps close timing.
 always @(posedge CPU_CLK) if (CPU_CE) begin
-    rom_do <= SDRAM_DOUT[15:0];
-    ram_do <= SDRAM_DOUT[31:0];
-    sram_do <= SDRAM_DOUT[(8 * SRAM_A[0])+:8];
-    bmp_do <= SDRAM_DOUT[(8 * BMP_A[0])+:8];
+    rom_do <= SDRAM_CH1_DOUT[15:0];
+    ram_do <= SDRAM_CH1_DOUT[31:0];
+    sram_do <= SDRAM_CH1_DOUT[(8 * SRAM_A[0])+:8];
+    bmp_do <= SDRAM_CH1_DOUT[(8 * BMP_A[0])+:8];
 end
+
+assign LS_DOUT = SDRAM_CH1_DOUT;
 
 assign ROM_DO = rom_do;
 assign ROM_READYn = rom_readyn;
@@ -159,43 +199,47 @@ assign BMP_READYn = bmp_readyn;
 
 always @* begin
     mem_we = '0;
-    sdram_waddr = 'X;
-    sdram_din = 'X;
-    sdram_be = 'X;
-    sdram_raddr = 'X;
-    if (~ROM_CEn) begin
-        sdram_raddr = ROM_BASE_A + 25'(ROM_A);
-        sdram_be = '1;
+    sdram_ch1_addr = 'X;
+    sdram_ch1_din = 'X;
+    sdram_ch1_be = 'X;
+    if (ls_sel) begin
+        mem_we = ls_we_req;
+        sdram_ch1_din = LS_DIN;
+        sdram_ch1_be = '1;
+        sdram_ch1_addr = LS_ADDR;
+    end
+    else if (~ROM_CEn) begin
+        sdram_ch1_addr = ROM_BASE_A + 27'(ROM_A);
+        sdram_ch1_be = '1;
     end
     else if (~RAM_CEn) begin
         mem_we = ~RAM_WEn;
-        sdram_din = RAM_DI;
-        sdram_be = ~RAM_BEn;
-        sdram_raddr = RAM_BASE_A + 25'(RAM_A);
-        sdram_waddr = sdram_raddr;
+        sdram_ch1_din = RAM_DI;
+        sdram_ch1_be = ~RAM_BEn;
+        sdram_ch1_addr = RAM_BASE_A + 27'(RAM_A);
     end
     else if (~SRAM_CEn) begin
         mem_we = ~SRAM_WEn;
-        sdram_din = {4{SRAM_DI}};
-        sdram_be = {2'b00, SRAM_A[0], ~SRAM_A[0]};
-        sdram_raddr = SRAM_BASE_A + 25'(SRAM_A);
-        sdram_waddr = sdram_raddr;
+        sdram_ch1_din = {4{SRAM_DI}};
+        sdram_ch1_be = {2'b00, SRAM_A[0], ~SRAM_A[0]};
+        sdram_ch1_addr = SRAM_BASE_A + 27'(SRAM_A);
     end
     else if (~BMP_CEn) begin
         mem_we = ~BMP_WEn;
-        sdram_din = {4{BMP_DI}};
-        sdram_be = {2'b00, BMP_A[0], ~BMP_A[0]};
-        sdram_raddr = BMP_BASE_A + 25'(BMP_A);
-        sdram_waddr = sdram_raddr;
+        sdram_ch1_din = {4{BMP_DI}};
+        sdram_ch1_be = {2'b00, BMP_A[0], ~BMP_A[0]};
+        sdram_ch1_addr = BMP_BASE_A + 27'(BMP_A);
     end
 end
 
-assign SDRAM_CLKREF = 0;//mem_start_req;
-assign SDRAM_WADDR = sdram_waddr;
-assign SDRAM_DIN = sdram_din;
-assign SDRAM_BE = sdram_be;
-assign SDRAM_WE = ~wact & SDRAM_WE_RDY & (mem_start_req | mem_pend_req) & mem_we;
-assign SDRAM_RD = ~ract & SDRAM_RD_RDY & (mem_start_req | mem_pend_req) & ~mem_we;
-assign SDRAM_RADDR = sdram_raddr;
+assign SDRAM_CH1_ADDR = sdram_ch1_addr;
+assign SDRAM_CH1_DIN = sdram_ch1_din;
+assign SDRAM_CH1_BE = sdram_ch1_be;
+assign SDRAM_CH1_RNW = ~mem_we;
+assign SDRAM_CH1_REQ = ch1_ready_d & ch1_req;
+
+// TODO
+assign SDRAM_CH2_REQ = '0;
+assign SDRAM_CH3_REQ = '0;
 
 endmodule
