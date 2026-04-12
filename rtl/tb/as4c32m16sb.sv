@@ -160,15 +160,10 @@ always @(posedge CLK) if (cke & ~cmd[3]) begin
         CMD_READ: begin
             col0[ba] <= a[9:0];
             bank <= ba;
-            cas_cnt <= cas_latency - 2;
-            rd_cnt <= rbl;
-            bc <= 0;
         end
         CMD_WRITE: begin
             col0[ba] <= a[9:0];
             bank <= ba;
-            wr_cnt <= wbl;
-            bc <= 0;
         end
         default: ;
     endcase
@@ -198,6 +193,21 @@ always @(posedge CLK) if (cke) begin
     else if (wr_cnt != 0) begin
         wr_cnt <= wr_cnt - 1;
         bc <= bc + 1'd1;
+    end
+
+    if (~cmd[3]) begin
+        case (cmd[2:0])
+            CMD_READ: begin
+                cas_cnt <= cas_latency - 2;
+                rd_cnt <= rbl;
+                bc <= 0;
+            end
+            CMD_WRITE: begin
+                wr_cnt <= wbl;
+                bc <= 0;
+            end
+            default: ;
+        endcase
     end
 
     if (((rd_cnt - 1 == 0) || (wr_cnt - 1 == 0)) && prechg[bank]) begin
