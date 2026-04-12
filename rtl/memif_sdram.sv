@@ -110,6 +110,8 @@ logic           ls_rd_ack_d = '0, ls_we_ack_d = '0;
 logic           ls_act = '0;
 logic           ls_done;
 logic           ls_sel;
+logic [2:0]     ls_dwell = '0;
+logic           ls_act_dwell;
 
 logic [26:0]    sdram_ch1_addr;
 logic [31:0]    sdram_ch1_din;
@@ -124,6 +126,7 @@ assign ls_we_req = LS_WE_REQ ^ ls_we_ack_d;
 assign ls_req = ~mem_act & (ls_rd_req | ls_we_req);
 assign ls_done = ls_act & SDRAM_CH1_READY;
 assign ls_sel = ls_req | ls_act;
+assign ls_act_dwell = ls_act | |ls_dwell;
 assign LS_RD_ACK = ls_rd_ack_d ^ ((LS_RD_REQ ^ ls_rd_ack_d) & ls_done);
 assign LS_WE_ACK = ls_we_ack_d ^ ((LS_WE_REQ ^ ls_we_ack_d) & ls_done);
 
@@ -133,7 +136,7 @@ assign sram_start_req = ~CPU_BCYSTn & ~SRAM_CEn;
 assign bmp_start_req = ~CPU_BCYSTn & ~BMP_CEn;
 assign mem_start_req = rom_start_req | ram_start_req | sram_start_req | bmp_start_req;
 
-assign mem_req = ~ls_act & ~mem_act & (mem_start_req | mem_pend_req) & mem_readyn;
+assign mem_req = ~ls_act_dwell & ~mem_act & (mem_start_req | mem_pend_req) & mem_readyn;
 assign mem_readyn = rom_readyn & ram_readyn & sram_readyn & bmp_readyn;
 
 assign ch1_req = mem_req | ls_req;
@@ -161,8 +164,13 @@ always @(posedge SDRAM_CLK) begin
 
     if (mem_act & (~CPU_RESn | (ch1_ready & ~mem_readyn)))
         mem_act <= '0;
-    if (ls_act & ls_done)
+    if (ls_act & ls_done) begin
         ls_act <= '0;
+        ls_dwell <= '1;
+    end
+
+    if (|ls_dwell)
+        ls_dwell <= ls_dwell - 1'd1;
 end
 
 assign mem_rdy = mem_act & ch1_ready;
