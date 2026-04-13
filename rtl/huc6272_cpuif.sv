@@ -48,6 +48,7 @@ typedef struct packed {
 
 logic [6:0]     rsel;
 logic [31:0]    dout;
+logic           rbusy;
 
 kradr_t         krra, krwa;
 logic [15:0]    krd;
@@ -77,7 +78,7 @@ always @(posedge CLK) if (CE) begin
         mpwr_pend <= '0;
     end
     else begin
-        if (~CSn & ~WRn) begin
+        if (~CSn & ~WRn & BUSYn) begin
             case (A[2:1])
                 2'b00: begin
                     rsel <= DI[6:0];
@@ -259,6 +260,7 @@ end
 
 always @* begin
     dout = '0;
+    rbusy = '0;
     case (A[2])
         1'b0: begin
             dout[6:0] = rsel;
@@ -293,8 +295,14 @@ always @* begin
                 end
                 7'h06: dout[7:0] = st_scsi.rxbuf;
                 7'h0c: dout = krra;
-                7'h0d: dout = krwa;
-                7'h0e: dout = {2{krd}};
+                7'h0d: begin
+                    dout = krwa;
+                    rbusy = '1;
+                end
+                7'h0e: begin
+                    dout = {2{krd}};
+                    rbusy = '1;
+                end
                 default: ;
             endcase
         end
@@ -303,7 +311,7 @@ end
 
 assign DO = (~CSn & ~RDn) ? (A[1] ? dout[31:16] : dout[15:0]) : '0;
 
-assign BUSYn = ~((~CSn & (~RDn | ~WRn)) & (krrd_act | krwr_act));
+assign BUSYn = ~((~CSn & (~RDn | ~WRn)) & rbusy & (krrd_act | krwr_act));
 assign IRQn = '1; // TODO
 
 always @* begin

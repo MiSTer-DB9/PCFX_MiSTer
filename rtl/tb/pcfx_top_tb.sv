@@ -8,7 +8,7 @@
 
 //`define USE_IOCTL_FOR_LOAD_ROMBIOS 1
 //`define LOAD_BMP_ROM 1
-`define LOAD_SRAMS 1
+//`define LOAD_SRAMS 1
 //`define SAVE_SRAMS 1
 `define VERIFY_SRAM_LOAD 1
 `define SAVE_FRAMES 1
@@ -28,7 +28,7 @@ initial begin
     $dumpfile("pcfx_top_tb.vcd");
     $dumpvars();
 `else
-    $dumpfile("pcfx_top_tb.verilator.fst");
+    #(222e3) $dumpfile("pcfx_top_tb.verilator.fst");
     $dumpvars();
 `endif
 end
@@ -513,7 +513,7 @@ end
 initial begin
     @(running) ;
     //repeat (4) #(1000e3) ;
-    #(500e3) ;
+    #(300e3) ;
 
 `ifdef SAVE_SRAMS
     if (bk_ena) begin

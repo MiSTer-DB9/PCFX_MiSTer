@@ -172,6 +172,12 @@ task reg_write(input [6:0] rs, input [15:0] v);
     io_write16(2'b10, v);
 endtask
 
+task reg32_read(input [6:0] rs, output [31:0] v);
+    io_write16(2'b00, 16'(rs));
+    io_read16(2'b10, v[15:0]);
+    io_read16(2'b11, v[31:16]);
+endtask
+
 task reg32_write(input [6:0] rs, input [31:0] v);
     io_write16(2'b00, 16'(rs));
     io_write16(2'b10, v[15:0]);

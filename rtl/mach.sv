@@ -128,6 +128,7 @@ logic [15:0]    ga_do;
 logic           vdc_cpu_ce;
 
 logic           dck70, dck70_negedge;
+logic           dckkr, dckkr_negedge;
 logic           hs_posedge, hs_negedge;
 logic           vs_posedge, vs_negedge;
 
@@ -137,6 +138,17 @@ wire            mmc_irqn;
 wire [15:0]     mmc_do;
 wire [7:0]      mmc_scsi_do;
 wire            mmc_scsi_doe;
+
+logic [15:0]    mmc_ra_di, mmc_ra_do;
+wire [15:0]     krama_io;
+logic [8:0]     mmc_ra_a;
+logic           mmc_ra_oen, mmc_ra_wen, mmc_ra_rasn, mmc_ra_lcasn, mmc_ra_ucasn;
+logic [15:0]    mmc_rb_di, mmc_rb_do;
+wire [15:0]     kramb_io;
+logic [8:0]     mmc_rb_a;
+logic           mmc_rb_oen, mmc_rb_wen, mmc_rb_rasn, mmc_rb_lcasn, mmc_rb_ucasn;
+logic [23:0]    mmc_vd;
+logic           mmc_vde;
 
 logic [7:0]     scsi_data;
 wire            scsi_atnn, scsi_bsyn, scsi_ackn, scsi_rstn,  scsi_msgn,
@@ -266,6 +278,10 @@ huc6261 vce
      .VDC0_VD(vdc0_vd),
      .VDC1_VD(vdc1_vd),
 
+     .DCKKR(dckkr),
+     .DCKKR_NEGEDGE(dckkr_negedge),
+     .MMC_VD(mmc_vd),
+
      .Y(VID_Y),
      .U(VID_U),
      .V(VID_V),
@@ -383,6 +399,36 @@ dpram #(.addr_width(16), .data_width(16), .disable_value(0)) vram1
      .cs_b('1)
      );
 
+// -- Temporary --
+pd424260 krama
+   (
+    .IO(krama_io),
+    .A(mmc_ra_a),
+    .OEn(mmc_ra_oen),
+    .WEn(mmc_ra_wen),
+    .RASn(mmc_ra_rasn),
+    .LCASn(mmc_ra_lcasn),
+    .UCASn(mmc_ra_ucasn)
+    );
+
+assign krama_io = mmc_ra_oen ? mmc_ra_do : 'Z;
+assign mmc_ra_di = krama_io;
+
+// -- Temporary --
+pd424260 kramb
+   (
+    .IO(kramb_io),
+    .A(mmc_rb_a),
+    .OEn(mmc_rb_oen),
+    .WEn(mmc_rb_wen),
+    .RASn(mmc_rb_rasn),
+    .LCASn(mmc_rb_lcasn),
+    .UCASn(mmc_rb_ucasn)
+    );
+
+assign kramb_io = mmc_rb_oen ? mmc_rb_do : 'Z;
+assign mmc_rb_di = kramb_io;
+
 huc6272 mmc
     (
      .CLK(CLK),
@@ -397,6 +443,33 @@ huc6272 mmc
      .RDn(ga_rdn),
      .BUSYn(mmc_busyn),
      .IRQn(mmc_irqn),
+
+     .RA_DI(mmc_ra_di),
+     .RA_DO(mmc_ra_do),
+     .RA_A(mmc_ra_a),
+     .RA_OEn(mmc_ra_oen),
+     .RA_WEn(mmc_ra_wen),
+     .RA_RASn(mmc_ra_rasn),
+     .RA_LCASn(mmc_ra_lcasn),
+     .RA_UCASn(mmc_ra_ucasn),
+
+     .RB_DI(mmc_rb_di),
+     .RB_DO(mmc_rb_do),
+     .RB_A(mmc_rb_a),
+     .RB_OEn(mmc_rb_oen),
+     .RB_WEn(mmc_rb_wen),
+     .RB_RASn(mmc_rb_rasn),
+     .RB_LCASn(mmc_rb_lcasn),
+     .RB_UCASn(mmc_rb_ucasn),
+
+     .DCK(dckkr),
+     .DCK_NEGEDGE(dckkr_negedge),
+     .HSYNC_POSEDGE(hs_posedge),
+     .HSYNC_NEGEDGE(hs_negedge),
+     .VSYNC_POSEDGE(vs_posedge),
+     .VSYNC_NEGEDGE(vs_negedge),
+     .VD(mmc_vd),
+     .VDE(mmc_vde),
 
      .SCSI_DI(scsi_data),
      .SCSI_DO(mmc_scsi_do),

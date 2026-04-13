@@ -57,18 +57,18 @@ endtask
 
 task write_verify(input bank, input [17:0] start, input int count);
 bit [17:0] addr;
-bit [15:0] v, vr;
+bit [31:0] v, vr;
     reg32_write(7'h0d, {start[17], 3'b0, 10'd1, bank, start[16:0]});
-    for (int i = 0; i < count; i++) begin
+    for (int i = 0; i < count; i+=2) begin
         addr = start + i[17:0];
-        v = ~addr[15:0];
-        reg_write(7'h0e, v);
+        v = {~addr[15:0], addr[7:0], addr[15:8]};
+        reg32_write(7'h0e, v);
     end
     reg32_write(7'h0c, {start[17], 3'b0, 10'd1, bank, start[16:0]});
-    for (int i = 0; i < count; i++) begin
+    for (int i = 0; i < count; i+=2) begin
         addr = start + i[17:0];
-        v = ~addr[15:0];
-        reg_read(7'h0e, vr);
+        v = {~addr[15:0], addr[7:0], addr[15:8]};
+        reg32_read(7'h0e, vr);
         assert(v === vr);
     end
 endtask

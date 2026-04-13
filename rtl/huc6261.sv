@@ -48,11 +48,11 @@ module huc6261
      output reg       HBL
      );
 
-localparam [11:0] LEFT_BL_CLOCKS = 12'd456;
+localparam [11:0] LEFT_BL_CLOCKS = 12'd457;
 localparam [11:0] DISP_CLOCKS = 12'd2160;
 localparam [11:0] LINE_CLOCKS = 12'd2730;
 localparam [11:0] HS_CLOCKS = 12'd192;
-localparam [11:0] HS_OFF = 12'd46;
+localparam [11:0] HS_OFF = 12'd47;
 
 localparam [8:0] TOTAL_LINES = 9'd263;
 localparam [8:0] VS_LINES = 9'd3;
@@ -84,6 +84,8 @@ logic [8:0]     cpa;
 logic [15:0]    cpdin, cpdout;
 logic           cpd_wr, cpd_wr_d;
 logic [7:0]     vdc_sp_cpao, vdc_bg_cpao;
+logic [2:0]     pri_vdc_bg, pri_vdc_sp, pri_vpu,
+                pri_mmc_bg0, pri_mmc_bg1, pri_mmc_bg2, pri_mmc_bg3;
 
 //////////////////////////////////////////////////////////////////////
 // Register interface
@@ -126,6 +128,17 @@ always @(posedge CLK) if (CE) begin
                             vdc_sp_cpao <= DI[15:8];
                             vdc_bg_cpao <= DI[7:0];
                         end
+                        5'h08: begin
+                            pri_vdc_bg <= DI[0+:3];
+                            pri_vdc_sp <= DI[4+:3];
+                            pri_vpu <= DI[8+:3];
+                        end
+                        5'h09: begin
+                            pri_mmc_bg0 <= DI[0+:3];
+                            pri_mmc_bg1 <= DI[4+:3];
+                            pri_mmc_bg2 <= DI[8+:3];
+                            pri_mmc_bg3 <= DI[12+:3];
+                        end
                         default: ;
                     endcase
                 end
@@ -145,6 +158,17 @@ always @* begin
             case (ar)
                 5'd03:
                     dout[15:0] = cpdout;
+                5'h08: begin
+                    dout[0+:3] = pri_vdc_bg;
+                    dout[4+:3] = pri_vdc_sp;
+                    dout[8+:3] = pri_vpu;
+                end
+                5'h09: begin
+                    dout[0+:3] = pri_mmc_bg0;
+                    dout[4+:3] = pri_mmc_bg1;
+                    dout[8+:3] = pri_mmc_bg2;
+                    dout[12+:3] = pri_mmc_bg3;
+                end
                 default: ;
             endcase
         end
@@ -270,7 +294,7 @@ assign DCKKR = ckenkr;
 assign DCKKR_NEGEDGE = ckenkr_ne;
 
 //////////////////////////////////////////////////////////////////////
-// Video mixer
+// Video mixer, palette index
 
 logic             vdc_key;
 logic [8:0]       vdc_vd;
@@ -318,6 +342,27 @@ dpram #(.addr_width(9), .data_width(16)) cpram
     .q_b(cp_out),
     .cs_b(1'b1)
     );
+
+//////////////////////////////////////////////////////////////////////
+// Video mixer, YUV
+
+logic           mix_vdc_key;
+logic [7:0]     mix_out_y, mix_out_u, mix_out_v;
+
+always @(posedge CLK) if (DCK70) begin
+    mix_vdc_key <= vdc_key;
+end
+
+// TODO: Use pri_ registers
+always @* begin
+    {mix_out_y, mix_out_u, mix_out_v} = MMC_VD;
+
+    if (~vdc_key) begin
+        mix_out_y = cp_out[8+:8];
+        mix_out_u = {cp_out[7:4], cp_out[6:4], cp_out[6]};
+        mix_out_v = {cp_out[3:0], cp_out[2:0], cp_out[2]};
+    end
+end
 
 //////////////////////////////////////////////////////////////////////
 // Sync generators
@@ -371,9 +416,9 @@ always @(posedge CLK) if (DCK70) begin
     VBL <= vbl_ff;
     HBL <= hbl_ff;
 
-    Y <= cp_out[15:8];
-    U <= {cp_out[7:4], cp_out[6:4], cp_out[6]};
-    V <= {cp_out[3:0], cp_out[2:0], cp_out[2]};
+    Y <= mix_out_y;
+    U <= mix_out_u;
+    V <= mix_out_v;
 end
 
 endmodule

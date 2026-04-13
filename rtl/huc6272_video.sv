@@ -83,9 +83,9 @@ end
 //////////////////////////////////////////////////////////////////////
 // Active fetch / render windows
 
-localparam [9:0] FETCH_ROW_START = 10'd7;
+localparam [9:0] FETCH_ROW_START = 10'd21;
 localparam [9:0] FETCH_ROW_END = FETCH_ROW_START + 10'd240 - 10'd1;
-localparam [9:0] FETCH_COL_START = 10'd17;
+localparam [9:0] FETCH_COL_START = 10'd60;
 localparam [9:0] FETCH_COL_END = FETCH_COL_START + 10'd256 - 10'd1;
 
 wire fetch_row = (row >= FETCH_ROW_START) & (row <= FETCH_ROW_END);
@@ -97,8 +97,8 @@ wire [9:0] fetch_bg_col = col - FETCH_COL_START;
 
 localparam [9:0] RENDER_ROW_START = FETCH_ROW_START;
 localparam [9:0] RENDER_ROW_END = FETCH_ROW_END;
-localparam [9:0] RENDER_COL_START = 10'd20;
-localparam [9:0] RENDER_COL_END = RENDER_COL_START + 10'd256 - 10'd1;
+localparam [9:0] RENDER_COL_START = FETCH_COL_START + 10'd3;
+localparam [9:0] RENDER_COL_END = FETCH_COL_END + 10'd3;
 
 wire render_row = (row >= RENDER_ROW_START) & (row <= RENDER_ROW_END);
 wire render_col = (col >= RENDER_COL_START) & (col <= RENDER_COL_END);
