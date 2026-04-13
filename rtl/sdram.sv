@@ -65,7 +65,7 @@ module sdram
 // All times in ns are for AS4C32M16SB-7: tCK3 (clk cycle) = 7 ns (143 MHz)
 // Parameters are in whole cycles, and assume clk cycle = 1 / CLK_MHZ
 function int ns_to_cyc(int ns);
-    ns_to_cyc = int'($ceil(CLK_MHZ * ns / 1000.0));
+    ns_to_cyc = int'(((CLK_MHZ * ns + 999.0) / 1000.0));
 endfunction
 
 localparam TRC_MIN  = ns_to_cyc(63);
@@ -288,6 +288,9 @@ always @(posedge clk) begin
                     bast[b] <= BAST_IDLE;
                 end
         endcase
+
+        if (init)
+            bast[b] <= BAST_IDLE;
     end
 end
 
@@ -488,8 +491,6 @@ always @(posedge clk) begin
     if (init) begin
         state <= STATE_STARTUP;
         refresh_count <= startup_refresh_max - sdram_startup_cycles;
-        for (int i = 0; i < 4; i++)
-            bast[i] <= BAST_IDLE;
     end
 end
 

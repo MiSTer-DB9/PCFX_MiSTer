@@ -86,7 +86,7 @@ assign dmc_m_req = req;
 
 genvar          g;
 generate
-    for (g = 0; g < CN; g++) begin
+    for (g = 0; g < CN; g++) begin :cm_out
         assign cm_di[g] = dmc_m_di;
         assign cm_ack[g] = (g == prio_sel) & ack;
     end
