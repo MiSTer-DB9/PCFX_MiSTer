@@ -86,7 +86,7 @@ localparam NO_WRITE_BURST      = 1'b1;     // 0= write burst enabled, 1=only sin
 localparam MODE                = {3'b000, NO_WRITE_BURST, OP_MODE, CAS_LATENCY, ACCESS_TYPE, BURST_CODE};
 
 localparam sdram_startup_cycles= 14'd12100;// 100us, plus a little more, @ 100MHz
-localparam cycles_per_refresh  = 14'd300;  // (64000*64)/8192-1 Calc'd as (64ms @ 64MHz)/8192 rose
+localparam cycles_per_refresh  = 14'(ns_to_cyc(int'(64e6 / 8192))-1);  // 64ms / 8192 refresh cycles
 localparam startup_refresh_max = 14'b11111111111111;
 localparam startup_mode_cnt    = startup_refresh_max - 7;
 localparam startup_ref2_cnt    = 14'(startup_mode_cnt - TRC_MIN);
