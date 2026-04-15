@@ -120,5 +120,5 @@ endmodule
 
 
 // Local Variables:
-// compile-command: "iverilog -g2012 -grelative-include -s huc6272_video_render_tb -o huc6272_video_render_tb.vvp ../huc6272.sv ../huc6261.sv dpram.sv pd424260.sv huc6272_video_render_tb.sv && ./huc6272_video_render_tb.vvp && python3 huc6272_render2png.py huc6272_video_render.hex huc6272_video_render.png"
+// compile-command: "iverilog -g2012 -grelative-include -s huc6272_video_render_tb -DHUC6272_DMC_ENABLE -o huc6272_video_render_tb.vvp ../huc6272.sv ../huc6261.sv dpram.sv pd424260.sv huc6272_video_render_tb.sv && ./huc6272_video_render_tb.vvp && python3 huc6272_render2png.py huc6272_video_render.hex huc6272_video_render.png"
 // End:

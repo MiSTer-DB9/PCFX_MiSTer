@@ -7,6 +7,7 @@
 import core_pkg::hmi_t;
 
 module pcfx_top
+    #(parameter CLK_RAM_MHZ = 100.0)
 (
 	input             clk_sys,
     input             clk_ram,
@@ -94,7 +95,7 @@ wire [26:0] sdram_ch3_addr;
 wire [31:0] sdram_ch3_din, sdram_ch3_dout;
 wire        sdram_ch3_rnw, sdram_ch3_req, sdram_ch3_ready;
 
-sdram sdram
+sdram #(.CLK_MHZ(CLK_RAM_MHZ)) sdram
 (
     .*,
 
@@ -164,6 +165,15 @@ wire        mcp_rdn;
 wire        mcp_wrn;
 wire        mcp_readyn;
 
+wire [17:0] krama_a;
+wire [15:0] krama_di, krama_do;
+wire [1:0]  krama_be;
+wire        krama_wr, krama_req, krama_ack;
+wire [17:0] kramb_a;
+wire [15:0] kramb_di, kramb_do;
+wire [1:0]  kramb_be;
+wire        kramb_wr, kramb_req, kramb_ack;
+
 wire        bmp_cfg_en;
 logic [2:0] bmp_cfg_size;
 wire [22:0] bmp_a;
@@ -229,6 +239,22 @@ mach mach
    .MCP_WRn(mcp_wrn),
    .MCP_READYn(mcp_readyn),
 
+   .KRAMA_A(krama_a),
+   .KRAMA_DI(krama_di),
+   .KRAMA_DO(krama_do),
+   .KRAMA_BE(krama_be),
+   .KRAMA_WR(krama_wr),
+   .KRAMA_REQ(krama_req),
+   .KRAMA_ACK(krama_ack),
+
+   .KRAMB_A(kramb_a),
+   .KRAMB_DI(kramb_di),
+   .KRAMB_DO(kramb_do),
+   .KRAMB_BE(kramb_be),
+   .KRAMB_WR(kramb_wr),
+   .KRAMB_REQ(kramb_req),
+   .KRAMB_ACK(kramb_ack),
+
    .HMI(HMI),
 
    .A(a),
@@ -277,6 +303,22 @@ memif_sdram memif_sdram
    .BMP_CEn(bmp_cen),
    .BMP_WEn(bmp_wen),
    .BMP_READYn(bmp_readyn),
+
+   .KRAMA_A(krama_a),
+   .KRAMA_DI(krama_di),
+   .KRAMA_DO(krama_do),
+   .KRAMA_BE(krama_be),
+   .KRAMA_WR(krama_wr),
+   .KRAMA_REQ(krama_req),
+   .KRAMA_ACK(krama_ack),
+
+   .KRAMB_A(kramb_a),
+   .KRAMB_DI(kramb_di),
+   .KRAMB_DO(kramb_do),
+   .KRAMB_BE(kramb_be),
+   .KRAMB_WR(kramb_wr),
+   .KRAMB_REQ(kramb_req),
+   .KRAMB_ACK(kramb_ack),
 
    .LS_ADDR(ls_addr),
    .LS_DIN(ls_din),

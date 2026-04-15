@@ -47,9 +47,10 @@ wire        SDRAM_nCAS;
 wire        SDRAM_nRAS;
 wire        SDRAM_nWE;
 
+localparam CLK_RAM_MHZ = 100.0;
 assign SDRAM_CLK = clk_ram;
 
-sdram_xsds sdrb (.*);
+sdram_xsds #(.CLK_MHZ(CLK_RAM_MHZ)) sdrb (.*);
 
 //////////////////////////////////////////////////////////////////////
 
@@ -87,7 +88,7 @@ wire        vs;
 wire [7:0]  r, g, b;
 logic       reset_sys;
 
-pcfx_top pcfx_top
+pcfx_top #(.CLK_RAM_MHZ(CLK_RAM_MHZ)) pcfx_top
 (
 	.clk_sys(clk_sys),
     .clk_ram(clk_ram),

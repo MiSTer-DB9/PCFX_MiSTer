@@ -38,6 +38,24 @@ module memif_sdram
     input         BMP_WEn,
     output        BMP_READYn,
 
+    // KRAM bank A memory interface
+    input [18:1]  KRAMA_A,
+    output [15:0] KRAMA_DI,
+    input [15:0]  KRAMA_DO,
+    input [1:0]   KRAMA_BE,
+    input         KRAMA_WR,
+    input         KRAMA_REQ,
+    output        KRAMA_ACK,
+
+    // KRAM bank B memory interface
+    input [18:1]  KRAMB_A,
+    output [15:0] KRAMB_DI,
+    input [15:0]  KRAMB_DO,
+    input [1:0]   KRAMB_BE,
+    input         KRAMB_WR,
+    input         KRAMB_REQ,
+    output        KRAMB_ACK,
+
     // ROM / RAM loader/saver interface
 	input [26:0]  LS_ADDR,      // byte address
 	input [31:0]  LS_DIN,       // data input from loader
@@ -116,10 +134,6 @@ logic           ls_act_dwell;
 logic [26:0]    sdram_ch1_addr;
 logic [31:0]    sdram_ch1_din;
 logic [3:0]     sdram_ch1_be;
-logic           sdram_ch1_we;
-logic           sdram_ch1_req;
-
-logic           sdram_ch1_req_d = '0;
 
 assign ls_rd_req = LS_RD_REQ ^ ls_rd_ack_d;
 assign ls_we_req = LS_WE_REQ ^ ls_we_ack_d;
@@ -145,7 +159,6 @@ assign ch1_ready = (ch1_ready_d & ~(~ch1_act & ch1_req)) | SDRAM_CH1_READY;
 
 always @(posedge SDRAM_CLK) begin
     mem_pend_req <= (mem_pend_req | mem_start_req) & ~(~CPU_RESn | mem_act);
-    sdram_ch1_req_d <= SDRAM_CH1_REQ;
     ch1_ready_d <= ch1_ready;
 
     if (ls_done) begin
@@ -246,8 +259,64 @@ assign SDRAM_CH1_BE = sdram_ch1_be;
 assign SDRAM_CH1_RNW = ~mem_we;
 assign SDRAM_CH1_REQ = ch1_ready_d & ch1_req;
 
-// TODO
-assign SDRAM_CH2_REQ = '0;
-assign SDRAM_CH3_REQ = '0;
+//////////////////////////////////////////////////////////////////////
+
+logic           ch2_req, ch2_act;
+logic           ch2_ready, ch2_ready_d = '1;
+logic           krama_ack = '0;
+
+assign ch2_req = ~ch2_act & KRAMA_REQ & ~krama_ack;
+assign ch2_ready = ch2_ready_d & ~(~ch2_act & ch2_req) | SDRAM_CH2_READY;
+
+always @(posedge SDRAM_CLK) begin
+    ch2_ready_d <= ch2_ready;
+
+    if (~ch2_act & SDRAM_CH2_REQ)
+        ch2_act <= '1;
+
+    if (ch2_act & (ch2_ready & krama_ack))
+        ch2_act <= '0;
+end
+
+always @(posedge CPU_CLK) begin
+    krama_ack <= ch2_act & ch2_ready;
+end
+
+assign SDRAM_CH2_ADDR = KRAMA_BASE_A + 27'({KRAMA_A, 1'b0});
+assign SDRAM_CH2_DIN = {2{KRAMA_DO}};
+assign SDRAM_CH2_REQ = ch2_ready_d & ch2_req & 0; // HACK: Temp. disable KRAMA
+assign SDRAM_CH2_RNW = ~KRAMA_WR;
+assign KRAMA_DI = SDRAM_CH2_DOUT[15:0];
+assign KRAMA_ACK = krama_ack;
+
+//////////////////////////////////////////////////////////////////////
+
+logic           ch3_req, ch3_act;
+logic           ch3_ready, ch3_ready_d = '1;
+logic           kramb_ack = '0;
+
+assign ch3_req = ~ch3_act & KRAMB_REQ & ~kramb_ack;
+assign ch3_ready = ch3_ready_d & ~(~ch3_act & ch3_req) | SDRAM_CH3_READY;
+
+always @(posedge SDRAM_CLK) begin
+    ch3_ready_d <= ch3_ready;
+
+    if (~ch3_act & SDRAM_CH3_REQ)
+        ch3_act <= '1;
+
+    if (ch3_act & (ch3_ready & kramb_ack))
+        ch3_act <= '0;
+end
+
+always @(posedge CPU_CLK) begin
+    kramb_ack <= ch3_act & ch3_ready;
+end
+
+assign SDRAM_CH3_ADDR = KRAMB_BASE_A + 27'({KRAMB_A, 1'b0});
+assign SDRAM_CH3_DIN = {2{KRAMB_DO}};
+assign SDRAM_CH3_REQ = ch3_ready_d & ch3_req;
+assign SDRAM_CH3_RNW = ~KRAMB_WR;
+assign KRAMB_DI = SDRAM_CH3_DOUT[15:0];
+assign KRAMB_ACK = kramb_ack;
 
 endmodule

@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v4.0.0-prealpha (8ba24ab+) (w)1999-2022 BSI
-[*] Mon Apr 13 05:12:26 2026
+[*] Wed Apr 15 04:23:59 2026
 [*]
 [dumpfile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/pcfx_top_tb.verilator.fst"
-[dumpfile_mtime] "Mon Apr 13 05:00:22 2026"
-[dumpfile_size] 32050637
+[dumpfile_mtime] "Wed Apr 15 03:57:18 2026"
+[dumpfile_size] 52875093
 [savefile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/pcfx_top_tb.verilator.gtkw"
-[timestart] 288340600
+[timestart] 248156930
 [size] 1334 601
 [pos] -1 -1
-*-17.346287 288666860 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+*-11.858119 248168920 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 [markername] AA
 [markername] BB
 [markername] CC
@@ -39,9 +39,8 @@
 [treeopen] pcfx_top_tb.
 [treeopen] pcfx_top_tb.pcfx_top.
 [treeopen] pcfx_top_tb.pcfx_top.mach.
-[treeopen] pcfx_top_tb.pcfx_top.mach.cpu.
-[treeopen] pcfx_top_tb.pcfx_top.mach.kramb.
-[treeopen] pcfx_top_tb.pcfx_top.mach.mmc.
+[treeopen] pcfx_top_tb.pcfx_top.mach.mmc.video.
+[treeopen] pcfx_top_tb.pcfx_top.sdram.
 [sst_width] 255
 [signals_width] 280
 [sst_expanded] 1
@@ -94,9 +93,18 @@ pcfx_top_tb.pcfx_top.bmp_ioctl_blk_cnt[31:0]
 pcfx_top_tb.pcfx_top.bmp_sd_blk_cnt[31:0]
 @1001200
 -pcfx_top
-@c00200
+@800200
 -sdram
-@1401200
+@28
+pcfx_top_tb.pcfx_top.sdram.ch1_req
+pcfx_top_tb.pcfx_top.sdram.ch1_ready
+pcfx_top_tb.pcfx_top.sdram.ch2_req
+pcfx_top_tb.pcfx_top.sdram.ch2_ready
+pcfx_top_tb.pcfx_top.sdram.ch3_req
+pcfx_top_tb.pcfx_top.sdram.ch3_ready
+@23
+pcfx_top_tb.pcfx_top.sdram.refresh_wait[3:0]
+@1000200
 -sdram
 @c00200
 -u1a
@@ -115,7 +123,7 @@ pcfx_top_tb.sdrb.u1a.DQML
 pcfx_top_tb.sdrb.u1a.cmd[3:0]
 @1401200
 -u1a
-@c00200
+@800200
 -memif_sdram
 @28
 pcfx_top_tb.pcfx_top.memif_sdram.SRAM_CEn
@@ -125,7 +133,25 @@ pcfx_top_tb.pcfx_top.memif_sdram.BMP_WEn
 pcfx_top_tb.pcfx_top.memif_sdram.mem_start_req
 pcfx_top_tb.pcfx_top.memif_sdram.mem_pend_req
 pcfx_top_tb.pcfx_top.memif_sdram.mem_rdy
-@1401200
+@22
+pcfx_top_tb.pcfx_top.memif_sdram.KRAMA_DI[15:0]
+@28
+pcfx_top_tb.pcfx_top.memif_sdram.KRAMA_WR
+pcfx_top_tb.pcfx_top.memif_sdram.KRAMA_REQ
+pcfx_top_tb.pcfx_top.memif_sdram.KRAMA_ACK
+pcfx_top_tb.pcfx_top.memif_sdram.ch3_req
+pcfx_top_tb.pcfx_top.memif_sdram.SDRAM_CH3_REQ
+pcfx_top_tb.pcfx_top.memif_sdram.ch3_act
+pcfx_top_tb.pcfx_top.memif_sdram.SDRAM_CH3_READY
+pcfx_top_tb.pcfx_top.memif_sdram.ch3_ready
+pcfx_top_tb.pcfx_top.memif_sdram.ch3_ready_d
+@22
+pcfx_top_tb.pcfx_top.memif_sdram.KRAMB_DI[15:0]
+@28
+pcfx_top_tb.pcfx_top.memif_sdram.KRAMB_WR
+pcfx_top_tb.pcfx_top.memif_sdram.KRAMB_REQ
+pcfx_top_tb.pcfx_top.memif_sdram.KRAMB_ACK
+@1000200
 -memif_sdram
 @c00200
 -fx_bmp
@@ -244,25 +270,10 @@ pcfx_top_tb.pcfx_top.mach.mmc.BUSYn
 @22
 pcfx_top_tb.pcfx_top.mach.mmc.cpuif.rsel[6:0]
 pcfx_top_tb.pcfx_top.mach.mmc.VD[23:0]
+@28
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfeb.mtrg
 @1000200
 -mmc
-@800200
--kramb
-@22
-pcfx_top_tb.pcfx_top.mach.kramb.A[8:0]
-pcfx_top_tb.pcfx_top.mach.kramb.IO[15:0]
-@28
-pcfx_top_tb.pcfx_top.mach.kramb.RASn
-pcfx_top_tb.pcfx_top.mach.kramb.UCASn
-pcfx_top_tb.pcfx_top.mach.kramb.OEn
-pcfx_top_tb.pcfx_top.mach.kramb.WEn
-pcfx_top_tb.pcfx_top.mach.kramb.wen[1:0]
-@22
-pcfx_top_tb.pcfx_top.mach.kramb.wbuf[15:0]
-pcfx_top_tb.pcfx_top.mach.kramb.row[8:0]
-pcfx_top_tb.pcfx_top.mach.kramb.col[8:0]
-@1000200
--kramb
 @c00200
 -scsi
 @22
@@ -358,9 +369,7 @@ pcfx_top_tb.pcfx_top.mach.vce.h_cnt[11:0]
 pcfx_top_tb.pcfx_top.mach.vce.v_cnt[8:0]
 @22
 pcfx_top_tb.pcfx_top.mach.vce.vdc_vd[8:0]
-@23
 pcfx_top_tb.pcfx_top.mach.vce.MMC_VD[23:0]
-@22
 pcfx_top_tb.pcfx_top.mach.vce.mix_cpa_out[8:0]
 pcfx_top_tb.pcfx_top.mach.vce.Y[7:0]
 pcfx_top_tb.pcfx_top.mach.vce.U[7:0]

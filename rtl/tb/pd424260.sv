@@ -3,8 +3,6 @@
 // Copyright (c) 2026 David Hunter
 
 // TODO:
-// - Enforce timing
-// - Write cycle
 // - Refresh
 
 `timescale 1ns / 1ns

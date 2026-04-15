@@ -22,6 +22,8 @@ module huc6272
      output        BUSYn,
      output        IRQn,
 
+`ifdef HUC6272_DMC_ENABLE
+
      // DRAM bank A interface
      input [15:0]  RA_DI,
      output [15:0] RA_DO,
@@ -41,6 +43,28 @@ module huc6272
      output        RB_RASn,
      output        RB_LCASn,
      output        RB_UCASn,
+
+`else // ifndef HUC6272_DMC_ENABLE
+
+     // DRAM bank A memory interface
+     output [17:0] MA_A,
+     input [15:0]  MA_DI,
+     output [15:0] MA_DO,
+     output [1:0]  MA_BE,
+     output        MA_WR,
+     output        MA_REQ,
+     input         MA_ACK,
+
+     // DRAM bank B memory interface
+     output [17:0] MB_A,
+     input [15:0]  MB_DI,
+     output [15:0] MB_DO,
+     output [1:0]  MB_BE,
+     output        MB_WR,
+     output        MB_REQ,
+     input         MB_ACK,
+
+`endif // HUC6272_DMC_ENABLE
 
      // Video interface
      input         DCK, // pixel clock enable
@@ -116,6 +140,8 @@ huc6272_cpuif cpuif
 //////////////////////////////////////////////////////////////////////
 // DRAM memory controllers
 
+`ifdef HUC6272_DMC_ENABLE
+
 huc6272_dmc dmca
    (
     .*,
@@ -159,6 +185,27 @@ huc6272_dmc dmcb
     .R_LCASn(RB_LCASn),
     .R_UCASn(RB_UCASn)
     );
+
+`else // ifndef HUC6272_DMC_ENABLE
+
+// DMC is external to this chip
+assign MA_A = dmca_m_a;
+assign MA_DO = dmca_m_do;
+assign MA_BE = dmca_m_be;
+assign MA_WR = dmca_m_wr;
+assign MA_REQ = dmca_m_req;
+assign dmca_m_di = MA_DI;
+assign dmca_m_ack = MA_ACK;
+
+assign MB_A = dmcb_m_a;
+assign MB_DO = dmcb_m_do;
+assign MB_BE = dmcb_m_be;
+assign MB_WR = dmcb_m_wr;
+assign MB_REQ = dmcb_m_req;
+assign dmcb_m_di = MB_DI;
+assign dmcb_m_ack = MB_ACK;
+
+`endif // HUC6272_DMC_ENABLE
 
 //////////////////////////////////////////////////////////////////////
 // Memory fabric

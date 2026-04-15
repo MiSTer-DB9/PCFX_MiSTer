@@ -96,5 +96,5 @@ endmodule
 
 
 // Local Variables:
-// compile-command: "iverilog -g2012 -grelative-include -s huc6272_video_kram_tb -o huc6272_video_kram_tb.vvp ../huc6272.sv ../huc6261.sv dpram.sv pd424260.sv huc6272_video_kram_tb.sv && ./huc6272_video_kram_tb.vvp"
+// compile-command: "iverilog -g2012 -grelative-include -s huc6272_video_kram_tb -DHUC6272_DMC_ENABLE -o huc6272_video_kram_tb.vvp ../huc6272.sv ../huc6261.sv dpram.sv pd424260.sv huc6272_video_kram_tb.sv && ./huc6272_video_kram_tb.vvp"
 // End:
