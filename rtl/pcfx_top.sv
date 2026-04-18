@@ -44,7 +44,6 @@ module pcfx_top
 
     input             hmi_t HMI,
 
-	output            SDRAM_CLK,
 	output            SDRAM_CKE,
 	output [12:0]     SDRAM_A,
 	output [1:0]      SDRAM_BA,

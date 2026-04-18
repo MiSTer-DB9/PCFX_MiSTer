@@ -125,7 +125,6 @@ pcfx_top #(.CLK_RAM_MHZ(CLK_RAM_MHZ)) pcfx_top
 
     .HMI(hmi),
 
-    .SDRAM_CLK(SDRAM_CLK),
     .SDRAM_CKE(SDRAM_CKE),
     .SDRAM_A(SDRAM_A),
     .SDRAM_BA(SDRAM_BA),
