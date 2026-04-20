@@ -127,7 +127,7 @@ sdram_bank #(CLK_MHZ) ba0
     .DREQ(badreq[0]),
     .IDLE(baidle[0]),
     .PAUSE(bapause),
-    .BBSSEL(bbsba == 4'd0),
+    .BBSSEL(bbsba == 2'd0),
     .R_DQ(SDRAM_DQ),
     .R_A(bar_a[0]),
     .R_CMD(bar_cmd[0])
@@ -148,7 +148,7 @@ sdram_bank #(CLK_MHZ) ba1
     .DREQ(badreq[1]),
     .IDLE(baidle[1]),
     .PAUSE(bapause),
-    .BBSSEL(bbsba == 4'd1),
+    .BBSSEL(bbsba == 2'd1),
     .R_DQ(SDRAM_DQ),
     .R_A(bar_a[1]),
     .R_CMD(bar_cmd[1])
@@ -169,7 +169,7 @@ sdram_bank #(CLK_MHZ) ba2
     .DREQ(badreq[2]),
     .IDLE(baidle[2]),
     .PAUSE(bapause),
-    .BBSSEL(bbsba == 4'd2),
+    .BBSSEL(bbsba == 2'd2),
     .R_DQ(SDRAM_DQ),
     .R_A(bar_a[2]),
     .R_CMD(bar_cmd[2])
@@ -190,7 +190,7 @@ sdram_bank #(CLK_MHZ) ba3
     .DREQ(badreq[3]),
     .IDLE(baidle[3]),
     .PAUSE(bapause),
-    .BBSSEL(bbsba == 4'd3),
+    .BBSSEL(bbsba == 2'd3),
     .R_DQ(SDRAM_DQ),
     .R_A(bar_a[3]),
     .R_CMD(bar_cmd[3])
