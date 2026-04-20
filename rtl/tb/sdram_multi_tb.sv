@@ -205,6 +205,14 @@ task load_sdram;
         sdram_write(a, a[15:0] | {a[24:23], 12'b0});
 endtask
 
+function int fuzzy_time(int base);
+static int deltas[10] = '{0, -3, 2, 4, -1, -2, 3, 1, -4, 0};
+static int i = 0;
+    fuzzy_time = base;
+    fuzzy_time += deltas[i];
+    i = (i + 1) % $size(deltas);
+endfunction
+
 initial #0 begin
 static bit exit = 0;
 
@@ -225,13 +233,16 @@ static bit exit = 0;
             exit = 1;
         end
         begin
+        int t;
             repeat (30) @(posedge clk_sys) ;
             while (!exit) begin
                 -> cpu_read;
-                repeat (16) @(posedge clk_sys) ;
+                t = fuzzy_time(5);
+                repeat (t) @(posedge clk_sys) ;
                 while (cpu_busy_read) @(posedge clk_sys) ;
                 -> cpu_write;
-                repeat (16) @(posedge clk_sys) ;
+                t = fuzzy_time(5);
+                repeat (t) @(posedge clk_sys) ;
                 while (cpu_busy_write) @(posedge clk_sys) ;
             end
         end

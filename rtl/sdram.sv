@@ -37,7 +37,6 @@ module sdram
     output            SDRAM_nRAS,  // row address select
     output            SDRAM_nCAS,  // columns address select
     output            SDRAM_CKE,   // clock enable
-    //output            SDRAM_CLK,   // clock for chip
 
     input      [26:0] ch1_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
     output reg [31:0] ch1_dout,    // data output to cpu
@@ -45,44 +44,26 @@ module sdram
     input             ch1_req,     // request
     input             ch1_rnw,     // 1 - read, 0 - write
     input      [3:0]  ch1_be,
-    output reg        ch1_ready,
-    
+    output            ch1_ready,
+
     input      [26:0] ch2_addr,    // 25 bit address for 8bit mode. addr[0] = 0 for 16bit mode for correct operations.
     output reg [31:0] ch2_dout,    // data output to cpu
     input      [31:0] ch2_din,     // data input from cpu
     input             ch2_req,     // request
     input             ch2_rnw,     // 1 - read, 0 - write
-    output reg        ch2_ready,
+    output            ch2_ready,
 
     input      [26:0] ch3_addr,
     output reg [31:0] ch3_dout,
     input      [31:0] ch3_din,
     input             ch3_req,
     input             ch3_rnw,
-    output reg        ch3_ready
+    output            ch3_ready
 );
 
-// All times in ns are for AS4C32M16SB-7: tCK3 (clk cycle) = 7 ns (143 MHz)
-// Parameters are in whole cycles, and assume clk cycle = 1 / CLK_MHZ
-function int ns_to_cyc(int ns);
-    ns_to_cyc = int'(((CLK_MHZ * ns + 999.0) / 1000.0));
-endfunction
+`include "sdram_defs.svh"
 
-localparam TRC_MIN  = ns_to_cyc(63);
-localparam TRRD_MIN = ns_to_cyc(14);
-localparam TRCD_MIN = ns_to_cyc(21);
-localparam TRP_MIN  = ns_to_cyc(21);
-localparam TWR_MIN  = ns_to_cyc(14);
-localparam TRAS_MIN = ns_to_cyc(42);
-localparam TRAS_MAX = ns_to_cyc(120000);
-
-// Burst length = 4
-localparam BURST_LENGTH        = 2;
 localparam BURST_CODE          = (BURST_LENGTH == 8) ? 3'b011 : (BURST_LENGTH == 4) ? 3'b010 : (BURST_LENGTH == 2) ? 3'b001 : 3'b000;  // 000=1, 001=2, 010=4, 011=8
-localparam ACCESS_TYPE         = 1'b0;     // 0=sequential, 1=interleaved
-localparam CAS_LATENCY         = 3'd2;     // 2 for < 100MHz, 3 for >100MHz
-localparam OP_MODE             = 2'b00;    // only 00 (standard operation) allowed
-localparam NO_WRITE_BURST      = 1'b1;     // 0= write burst enabled, 1=only single access write
 localparam MODE                = {3'b000, NO_WRITE_BURST, OP_MODE, CAS_LATENCY, ACCESS_TYPE, BURST_CODE};
 
 localparam sdram_startup_cycles= 14'd12100;// 100us, plus a little more, @ 100MHz
@@ -93,67 +74,18 @@ localparam startup_ref2_cnt    = 14'(startup_mode_cnt - TRC_MIN);
 localparam startup_ref1_cnt    = 14'(startup_ref2_cnt - TRC_MIN);
 localparam startup_pchg_cnt    = 14'(startup_ref1_cnt - TRP_MIN);
 
-// SDRAM commands
-wire [2:0] CMD_NOP             = 3'b111;
-wire [2:0] CMD_ACTIVE          = 3'b011;
-wire [2:0] CMD_READ            = 3'b101;
-wire [2:0] CMD_WRITE           = 3'b100;
-wire [2:0] CMD_PRECHARGE       = 3'b010;
-wire [2:0] CMD_AUTO_REFRESH    = 3'b001;
-wire [2:0] CMD_LOAD_MODE       = 3'b000;
-
 reg [13:0] refresh_count = startup_refresh_max - sdram_startup_cycles;
 reg  [3:0] refresh_wait;
 reg  [2:0] command;
-reg [15:0] dqout;
-reg        dqoe = 0;
 
-// BAnk STate
-localparam BAST_IDLE     = 0;
-localparam BAST_ACT      = 1;
-localparam BAST_ACT_WAIT = 2;
-localparam BAST_R_CMD    = 3;
-localparam BAST_R_DQM    = 4;
-localparam BAST_R        = 5;
-localparam BAST_W_CMD    = 6;
-localparam BAST_W_CMD_2  = 7;
-localparam BAST_W_REC    = 8;
-localparam BAST_PRE      = 9;
-
-reg [3:0]  barq, barq_d; // access request
-reg [3:0]  barnw; // read / not write
-reg [12:0] barow [4]; // row address
-reg [9:0]  bacol [4]; // column address
-reg [31:0] badin [4]; // data to write
-reg [3:0]  babe [4]; // byte enables
-reg [3:0]  bast [4]; // bank current status
-reg [3:0]  bawait [4]; // wait counter
+logic [3:0]  baidle; // bank idle status
 // bacreq, badreq are bitmaps of future bus cycles required, LSB first
-reg [3:0]  bacreq [4]; // cmd bus cycle request bitmap
-reg [3:0]  badreq [4]; // data bus cycle request bitmap
-
-wire [3:0] bast0 = bast[0];
-wire [3:0] bast1 = bast[1];
-wire [3:0] bast2 = bast[2];
-//wire [3:0] bast3 = bast[3];
-
-wire [3:0] bawait0 = bawait[0];
-wire [3:0] bawait1 = bawait[1];
-wire [3:0] bawait2 = bawait[2];
-//wire [3:0] bawait3 = bawait[3];
-
-wire [3:0] bacreq0 = bacreq[0];
-wire [3:0] bacreq1 = bacreq[1];
-wire [3:0] bacreq2 = bacreq[2];
-//wire [3:0] bacreq3 = bacreq[3];
-
-wire [3:0] badreq0 = badreq[0];
-wire [3:0] badreq1 = badreq[1];
-wire [3:0] badreq2 = badreq[2];
-//wire [3:0] badreq3 = badreq[3];
+logic [3:0]  bacreq [4]; // cmd bus cycle request bitmap
+logic [3:0]  badreq [4]; // data bus cycle request bitmap
+logic [12:0] bar_a [4];
+logic [2:0]  bar_cmd [4];
 
 // Bus Bank Scheduler
-reg [3:0]  bbsst; // state
 reg [1:0]  bbsba; // current bank
 reg [1:0]  bbsba_d; // last bank
 reg [3:0]  bbscact; // cmd bus cycle activity bitmap
@@ -177,127 +109,92 @@ localparam STATE_REFRESH = 5;
 
 reg  [3:0] state = STATE_STARTUP;
 
-// Channel to bank connection
-assign barq[0] = (barq_d[0] & ~ch1_ready) | ch1_req;
-assign barq[1] = (barq_d[1] & ~ch2_ready) | ch2_req;
-assign barq[2] = (barq_d[2] & ~ch3_ready) | ch3_req;
-assign barq[3] = 0;
-
-initial
-    barq_d = 0;
-always @(posedge clk) begin
-    if (init)
-        barq_d <= 0;
-    else
-        barq_d <= barq;
-end
-
-assign barnw[0] = ch1_rnw;
-assign barnw[1] = ch2_rnw;
-assign barnw[2] = ch3_rnw;
-
-assign barow[0] = addr_to_row(ch1_addr);
-assign barow[1] = addr_to_row(ch2_addr);
-assign barow[2] = addr_to_row(ch3_addr);
-
-assign bacol[0] = addr_to_col(ch1_addr);
-assign bacol[1] = addr_to_col(ch2_addr);
-assign bacol[2] = addr_to_col(ch3_addr);
-
-assign badin[0] = ch1_din;
-assign badin[1] = ch2_din;
-assign badin[2] = ch3_din;
-
-assign babe[0] = ch1_be;
-assign babe[1] = 4'b0011;
-assign babe[2] = 4'b0011;
-
 wire bapause = state != STATE_ACTIVE || refresh_count > cycles_per_refresh;
-wire baidle = (bast[0] == BAST_IDLE && bast[1] == BAST_IDLE &&
-               bast[2] == BAST_IDLE && bast[3] == BAST_IDLE);
 
-// Bank bus cycle request bitmap generator
-always @* begin
-    for (int b = 0; b < 4; b++) begin
-        bacreq[b] = 0;
-        badreq[b] = 0;
+// Bank submodules
+sdram_bank #(CLK_MHZ) ba0
+   (
+    .clk(clk),
+    .init(init),
+    .REQ(ch1_req),
+    .READY(ch1_ready),
+    .RNW(ch1_rnw),
+    .ADDR(ch1_addr),
+    .DIN(ch1_din),
+    .DOUT(ch1_dout),
+    .BE(ch1_be),
+    .CREQ(bacreq[0]),
+    .DREQ(badreq[0]),
+    .IDLE(baidle[0]),
+    .PAUSE(bapause),
+    .BBSSEL(bbsba == 2'd0),
+    .R_DQ(SDRAM_DQ),
+    .R_A(bar_a[0]),
+    .R_CMD(bar_cmd[0])
+    );
 
-        case (bast[b])
-            BAST_IDLE: begin
-                if (~bapause && barq[b]) begin
-                    bacreq[b] = 4'b1;
-                end
-            end
-            BAST_ACT_WAIT:
-                if (bawait[b] == 0) begin
-                    bacreq[b] = (1<<BURST_LENGTH)-1;
-                    badreq[b] = (1<<BURST_LENGTH)-1 << (barnw[b] ? 2 : 0);
-                end
-            default: ;
-        endcase
-    end
-end
+sdram_bank #(CLK_MHZ) ba1
+   (
+    .clk(clk),
+    .init(init),
+    .REQ(ch2_req),
+    .READY(ch2_ready),
+    .RNW(ch2_rnw),
+    .ADDR(ch2_addr),
+    .DIN(ch2_din),
+    .DOUT(ch2_dout),
+    .BE(4'b0011),
+    .CREQ(bacreq[1]),
+    .DREQ(badreq[1]),
+    .IDLE(baidle[1]),
+    .PAUSE(bapause),
+    .BBSSEL(bbsba == 2'd1),
+    .R_DQ(SDRAM_DQ),
+    .R_A(bar_a[1]),
+    .R_CMD(bar_cmd[1])
+    );
 
-// Bank FSM
-always @(posedge clk) begin
-    for (int b = 0; b < 4; b++) begin
-        if (bawait[b] != 0)
-            bawait[b] <= bawait[b] - 1'd1;
+sdram_bank #(CLK_MHZ) ba2
+   (
+    .clk(clk),
+    .init(init),
+    .REQ(ch3_req),
+    .READY(ch3_ready),
+    .RNW(ch3_rnw),
+    .ADDR(ch3_addr),
+    .DIN(ch3_din),
+    .DOUT(ch3_dout),
+    .BE(4'b0011),
+    .CREQ(bacreq[2]),
+    .DREQ(badreq[2]),
+    .IDLE(baidle[2]),
+    .PAUSE(bapause),
+    .BBSSEL(bbsba == 2'd2),
+    .R_DQ(SDRAM_DQ),
+    .R_A(bar_a[2]),
+    .R_CMD(bar_cmd[2])
+    );
 
-        case (bast[b])
-            BAST_IDLE: if (bbsba == b[1:0]) begin
-                if (~bapause && barq[b]) begin
-                    bast[b] <= BAST_ACT;
-                end
-            end
-            BAST_ACT: begin
-                bast[b] <= BAST_ACT_WAIT;
-                bawait[b] <= 4'(TRCD_MIN - 2);
-            end
-            BAST_ACT_WAIT: if (bbsba == b[1:0]) begin
-                if (bawait[b] == 0) begin
-                    bast[b] <= barnw[b] ? BAST_R_CMD : BAST_W_CMD;
-                end
-            end
-            BAST_R_CMD: begin
-                bast[b] <= BAST_R_DQM;
-            end
-            BAST_R_DQM: begin
-                bast[b] <= BAST_R;
-                bawait[b] <= BURST_LENGTH - 1;
-            end
-            BAST_R:
-                if (bawait[b] == 0) begin
-                    bast[b] <= BAST_PRE;
-                    bawait[b] <= 4'(TRP_MIN-(BURST_LENGTH-1)) - 2;
-                end
-            BAST_W_CMD: begin
-                bast[b] <= BAST_W_CMD_2;
-            end
-            BAST_W_CMD_2: begin
-                bast[b] <= BAST_W_REC;
-                bawait[b] <= 4'(TWR_MIN - 1);
-            end
-            BAST_W_REC:
-                if (bawait[b] == 0) begin
-                    bast[b] <= BAST_PRE;
-                    bawait[b] <= 4'(TRP_MIN - 2);
-                end
-            BAST_PRE:
-                if (bawait[b] == 0) begin
-                    bast[b] <= BAST_IDLE;
-                end
-        endcase
-
-        if (init)
-            bast[b] <= BAST_IDLE;
-    end
-end
-
-initial begin
-    for (int i = 0; i < 4; i++)
-        bast[i] = BAST_IDLE;
-end
+sdram_bank #(CLK_MHZ) ba3
+   (
+    .clk(clk),
+    .init(init),
+    .REQ('0),
+    .READY(),
+    .RNW('0),
+    .ADDR('0),
+    .DIN('0),
+    .DOUT(),
+    .BE('0),
+    .CREQ(bacreq[3]),
+    .DREQ(badreq[3]),
+    .IDLE(baidle[3]),
+    .PAUSE(bapause),
+    .BBSSEL(bbsba == 2'd3),
+    .R_DQ(SDRAM_DQ),
+    .R_A(bar_a[3]),
+    .R_CMD(bar_cmd[3])
+    );
 
 // Bus bank scheduler
 always @* begin
@@ -349,45 +246,13 @@ always @(posedge clk) begin
     end
 end
 
-assign bbsst = bast[bbsba];
-
 always @(posedge clk) begin
     bbscact <= {1'b0, bbscact[$left(bbscact):1]} | bacreq[bbsba];
     bbsdact <= {1'b0, bbsdact[$left(bbsdact):1]} | badreq[bbsba];
 end
 
-initial begin
-    ch1_ready = 0;
-    ch2_ready = 0;
-    ch3_ready = 0;
-end
-
 always @(posedge clk) begin
-    reg [CAS_LATENCY+BURST_LENGTH:0] data_ready_delay1, data_ready_delay2, data_ready_delay3;
-
-    ch1_ready <= 0;
-    ch2_ready <= 0;
-    ch3_ready <= 0;
-   
     refresh_count <= refresh_count+1'b1;
-
-    data_ready_delay1 <= data_ready_delay1>>1;
-    data_ready_delay2 <= data_ready_delay2>>1;
-    data_ready_delay3 <= data_ready_delay3>>1;
-
-    if(data_ready_delay1[1]) ch1_dout[15:00] <= SDRAM_DQ;
-    if(data_ready_delay1[0]) ch1_dout[31:16] <= SDRAM_DQ;
-    if(data_ready_delay1[0]) ch1_ready <= 1;
-
-    if(data_ready_delay2[1]) ch2_dout[15:00] <= SDRAM_DQ;
-    if(data_ready_delay2[0]) ch2_dout[31:16] <= SDRAM_DQ;
-    if(data_ready_delay2[0]) ch2_ready <= 1;
-
-    if(data_ready_delay3[1]) ch3_dout[15:00] <= SDRAM_DQ;
-    if(data_ready_delay3[0]) ch3_dout[31:16] <= SDRAM_DQ;
-    if(data_ready_delay3[0]) ch3_ready <= 1;
-
-    dqoe <= 0;
 
     command <= CMD_NOP;
     SDRAM_A[12:11] <= 2'b11; // DQM
@@ -438,53 +303,15 @@ always @(posedge clk) begin
         end
 
         STATE_ACTIVE: begin
-            case (bbsst)
-                BAST_IDLE:
-                    if (baidle && refresh_count > cycles_per_refresh) begin
-                        // Priority is to issue a refresh if one is outstanding
-                        state <= STATE_REFRESH;
-                        refresh_wait <= 4'(TRC_MIN);
-                    end
-                BAST_ACT: begin
-                    SDRAM_BA   <= bbsba;
-                    SDRAM_A    <= barow[bbsba];
-                    command    <= CMD_ACTIVE;
-                end
-                BAST_R_CMD: begin
-                    SDRAM_BA       <= bbsba;
-                    SDRAM_A[12:11] <= 0; // DQM for 1st beat
-                    SDRAM_A[10]    <= 1; // auto-precharge
-                    SDRAM_A[9:0]   <= bacol[bbsba];
-                    command <= CMD_READ;
-                    if(bbsba == 0)      data_ready_delay1[CAS_LATENCY+BURST_LENGTH-1] <= 1;
-                    else if(bbsba == 1) data_ready_delay2[CAS_LATENCY+BURST_LENGTH-1] <= 1;
-                    else                data_ready_delay3[CAS_LATENCY+BURST_LENGTH-1] <= 1;
-                end
-                BAST_R_DQM: begin
-                    SDRAM_A[12:11] <= 0; // DQM for 2nd beat
-                end
-                BAST_W_CMD: begin
-                    SDRAM_BA       <= bbsba;
-                    SDRAM_A[12:11] <= ~babe[bbsba][1:0]; // DQM for 1st beat
-                    SDRAM_A[10]    <= 0; // no auto-precharge
-                    SDRAM_A[9:0]   <= bacol[bbsba];
-                    command <= CMD_WRITE;
-                    dqout   <= badin[bbsba][15:0];
-                    dqoe    <= 1;
-                end
-                BAST_W_CMD_2: begin
-                    SDRAM_A[12:11] <= ~babe[bbsba][3:2]; // DQM for 2nd beat
-                    SDRAM_A[10]    <= 1; // auto-precharge
-                    SDRAM_A[0]     <= 1;
-                    command        <= CMD_WRITE;
-                    dqout          <= badin[bbsba][31:16];
-                    dqoe           <= 1;
-                    if(bbsba == 0)      ch1_ready <= 1;
-                    else if(bbsba == 1) ch2_ready <= 1;
-                    else                ch3_ready <= 1;
-                end
-                default: ;
-            endcase
+            SDRAM_BA <= bbsba;
+            SDRAM_A  <= bar_a[bbsba];
+            command  <= bar_cmd[bbsba];
+
+            if (&baidle && refresh_count > cycles_per_refresh) begin
+                // Priority is to issue a refresh if one is outstanding
+                state <= STATE_REFRESH;
+                refresh_wait <= 4'(TRC_MIN);
+            end
         end
     endcase
 
@@ -494,7 +321,6 @@ always @(posedge clk) begin
     end
 end
 
-assign SDRAM_DQ   = dqoe ? dqout : 'Z;
 assign SDRAM_nCS  = 0;
 assign SDRAM_nRAS = command[2];
 assign SDRAM_nCAS = command[1];
@@ -502,41 +328,6 @@ assign SDRAM_nWE  = command[0];
 assign SDRAM_CKE  = 1;
 assign {SDRAM_DQMH,SDRAM_DQML} = SDRAM_A[12:11];
 
-//altddio_out
-//#(
-//  .extend_oe_disable("OFF"),
-//  .intended_device_family("Cyclone V"),
-//  .invert_output("OFF"),
-//  .lpm_hint("UNUSED"),
-//  .lpm_type("altddio_out"),
-//  .oe_reg("UNREGISTERED"),
-//  .power_up_high("OFF"),
-//  .width(1)
-//)
-//sdramclk_ddr
-//(
-//  .datain_h(1'b0),
-//  .datain_l(1'b1),
-//  .outclock(clk),
-//  .dataout(SDRAM_CLK),
-//  .aclr(1'b0),
-//  .aset(1'b0),
-//  .oe(1'b1),
-//  .outclocken(1'b1),
-//  .sclr(1'b0),
-//  .sset(1'b0)
-//);
-
-function [1:0] addr_to_bank(input [26:0] a);
-    addr_to_bank = a[25:24];
-endfunction
-
-function [12:0] addr_to_row(input [26:0] a);
-    addr_to_row = a[22:10];
-endfunction
-
-function [9:0] addr_to_col(input [26:0] a);
-    addr_to_col = {a[23], a[9:1]};
-endfunction
-
 endmodule
+
+`include "sdram_bank.sv"
