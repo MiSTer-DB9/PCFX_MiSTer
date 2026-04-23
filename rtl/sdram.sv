@@ -84,6 +84,8 @@ logic [3:0]  bacreq [4]; // cmd bus cycle request bitmap
 logic [3:0]  badreq [4]; // data bus cycle request bitmap
 logic [12:0] bar_a [4];
 logic [2:0]  bar_cmd [4];
+logic [15:0] bar_dqo [4];
+logic [3:0]  bar_dqoe;
 
 // Bus Bank Scheduler
 reg [1:0]  bbsba; // current bank
@@ -99,6 +101,9 @@ wire [1:0] bbsschba0 = bbsschba[0];
 wire [1:0] bbsschba1 = bbsschba[1];
 wire [1:0] bbsschba2 = bbsschba[2];
 wire [1:0] bbsschba3 = bbsschba[3];
+
+logic [15:0] dqi, dqo;
+logic        dqoe;
 
 localparam STATE_STARTUP = 0;
 localparam STATE_WAIT    = 1;
@@ -128,7 +133,9 @@ sdram_bank #(CLK_MHZ) ba0
     .IDLE(baidle[0]),
     .PAUSE(bapause),
     .BBSSEL(bbsba == 2'd0),
-    .R_DQ(SDRAM_DQ),
+    .R_DQI(dqi),
+    .R_DQO(bar_dqo[0]),
+    .R_DQOE(bar_dqoe[0]),
     .R_A(bar_a[0]),
     .R_CMD(bar_cmd[0])
     );
@@ -149,7 +156,9 @@ sdram_bank #(CLK_MHZ) ba1
     .IDLE(baidle[1]),
     .PAUSE(bapause),
     .BBSSEL(bbsba == 2'd1),
-    .R_DQ(SDRAM_DQ),
+    .R_DQI(dqi),
+    .R_DQO(bar_dqo[1]),
+    .R_DQOE(bar_dqoe[1]),
     .R_A(bar_a[1]),
     .R_CMD(bar_cmd[1])
     );
@@ -170,7 +179,9 @@ sdram_bank #(CLK_MHZ) ba2
     .IDLE(baidle[2]),
     .PAUSE(bapause),
     .BBSSEL(bbsba == 2'd2),
-    .R_DQ(SDRAM_DQ),
+    .R_DQI(dqi),
+    .R_DQO(bar_dqo[2]),
+    .R_DQOE(bar_dqoe[2]),
     .R_A(bar_a[2]),
     .R_CMD(bar_cmd[2])
     );
@@ -191,7 +202,9 @@ sdram_bank #(CLK_MHZ) ba3
     .IDLE(baidle[3]),
     .PAUSE(bapause),
     .BBSSEL(bbsba == 2'd3),
-    .R_DQ(SDRAM_DQ),
+    .R_DQI(dqi),
+    .R_DQO(bar_dqo[3]),
+    .R_DQOE(bar_dqoe[3]),
     .R_A(bar_a[3]),
     .R_CMD(bar_cmd[3])
     );
@@ -251,6 +264,7 @@ always @(posedge clk) begin
     bbsdact <= {1'b0, bbsdact[$left(bbsdact):1]} | badreq[bbsba];
 end
 
+// Main FSM
 always @(posedge clk) begin
     refresh_count <= refresh_count+1'b1;
 
@@ -321,6 +335,21 @@ always @(posedge clk) begin
     end
 end
 
+// DQ registers
+//
+// Note: To meet data timing requirements, the critical I/O settings
+// FAST_INPUT_REGISTER, FAST_OUTPUT_REGISTER, and
+// FAST_OUTPUT_ENABLE_REGISTER must be applied on SDRAM_DQ pins.  They
+// will only be applied if each pin is latched/driven by a single
+// I/O/OE register.
+
+always @(posedge clk) begin
+    dqi <= SDRAM_DQ;
+    dqo <= bar_dqo[0] | bar_dqo[1] | bar_dqo[2] | bar_dqo[3];
+    dqoe <= |bar_dqoe;
+end
+
+assign SDRAM_DQ = dqoe ? dqo : 'Z;
 assign SDRAM_nCS  = 0;
 assign SDRAM_nRAS = command[2];
 assign SDRAM_nCAS = command[1];

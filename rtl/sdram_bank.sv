@@ -22,7 +22,9 @@ module sdram_bank
     output        IDLE,
     input         PAUSE,
     input         BBSSEL,
-    inout [15:0]  R_DQ,
+    input [15:0]  R_DQI,
+    output [15:0] R_DQO,
+    output        R_DQOE,
     output [12:0] R_A,
     output [2:0]  R_CMD
 );
@@ -209,14 +211,18 @@ always @(posedge clk) begin
 
     data_ready_delay <= data_ready_delay >> 1;
 
-    if (data_ready_delay[1]) dout[15:00] <= R_DQ;
-    if (data_ready_delay[0]) dout[31:16] <= R_DQ;
+    if (data_ready_delay[1]) dout[15:00] <= R_DQI;
+    if (data_ready_delay[0]) dout[31:16] <= R_DQI;
     if (data_ready_delay[0]) ready <= 1;
 
-    if (BBSSEL)
+    if (BBSSEL) begin
         case (st)
             BAST_R_CMD:
-                data_ready_delay[CAS_LATENCY+BURST_LENGTH-1] <= 1;
+                data_ready_delay[CAS_LATENCY+BURST_LENGTH] <= 1;
+            default: ;
+        endcase
+
+        case (stn)              // final DQ output is 1 clk later
             BAST_W_CMD: begin
                 dqout <= din[15:0];
                 dqoe  <= 1;
@@ -228,12 +234,14 @@ always @(posedge clk) begin
             end
             default: ;
         endcase
+    end
 end
 
 assign CREQ = creq;
 assign DREQ = dreq;
 assign IDLE = st == BAST_IDLE;
-assign R_DQ = dqoe ? dqout : 'Z;
+assign R_DQO = dqout;
+assign R_DQOE = dqoe;
 assign R_A = r_a;
 assign R_CMD = r_cmd;
 assign DOUT = dout;
