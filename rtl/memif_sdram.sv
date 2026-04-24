@@ -284,7 +284,7 @@ end
 
 assign SDRAM_CH2_ADDR = KRAMA_BASE_A + 27'({KRAMA_A, 1'b0});
 assign SDRAM_CH2_DIN = {2{KRAMA_DO}};
-assign SDRAM_CH2_REQ = ch2_ready_d & ch2_req & 0; // HACK: Temp. disable KRAMA
+assign SDRAM_CH2_REQ = ch2_ready_d & ch2_req;
 assign SDRAM_CH2_RNW = ~KRAMA_WR;
 assign KRAMA_DI = SDRAM_CH2_DOUT[15:0];
 assign KRAMA_ACK = krama_ack;
