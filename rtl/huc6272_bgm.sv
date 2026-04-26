@@ -77,8 +77,11 @@ always @(posedge CLK) begin
     end
 end
 
+// Use U/V=128, because yuv2rgb converts all zeros to green.
+localparam [23:0] PD_BLACK = {8'd0, 8'd128, 8'd128};
+
 always @* begin
-    cgpd = '0;
+    cgpd = PD_BLACK;
     if (RENDER) begin
         if (format_clr_16m) begin
             // 16M CG is ordered in KRAM as {Y0,Y1,U,V}.
@@ -90,7 +93,7 @@ end
 
 always @(posedge CLK) begin
     if (~RESn) begin
-        cgpdo <= '0;
+        cgpdo <= PD_BLACK;
         cgpdeo <= '0;
     end
     else if (cgrce) begin

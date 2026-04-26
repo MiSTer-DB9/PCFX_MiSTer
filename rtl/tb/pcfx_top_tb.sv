@@ -28,7 +28,7 @@ initial begin
     $dumpfile("pcfx_top_tb.vcd");
     $dumpvars();
 `else
-    #(222e3) $dumpfile("pcfx_top_tb.verilator.fst");
+    #(215e3) $dumpfile("pcfx_top_tb.verilator.fst");
     $dumpvars();
 `endif
 end
@@ -513,7 +513,7 @@ end
 initial begin
     @(running) ;
     //repeat (4) #(1000e3) ;
-    #(300e3) ;
+    #(230e3) ;
 
 `ifdef SAVE_SRAMS
     if (bk_ena) begin
