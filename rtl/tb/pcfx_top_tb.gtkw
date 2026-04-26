@@ -93,7 +93,7 @@ pcfx_top_tb.pcfx_top.memif_sdram.ls_done
 @200
 -
 @24
-pcfx_top_tb.pcfx_top.sdram.state[3:0]
+pcfx_top_tb.pcfx_top.sdram.state[1:0]
 @28
 pcfx_top_tb.pcfx_top.sdram.ch1_req
 pcfx_top_tb.pcfx_top.sdram.ch1_rnw

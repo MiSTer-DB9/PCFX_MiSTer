@@ -63,6 +63,7 @@ endtask
 // SDRAM controller
 
 logic           sdram_init;
+logic           hblank = '0;
 logic [26:0]    ch1_addr, ch2_addr, ch3_addr;
 logic [31:0]    ch1_dout, ch2_dout, ch3_dout;
 logic [31:0]    ch1_din, ch2_din, ch3_din;
@@ -77,6 +78,7 @@ sdram #(.CLK_MHZ(CLK_MHZ)) sdram
 
     .init(sdram_init),
     .clk(clk_ram),
+    .hblank(hblank),
 
     .ch1_addr(ch1_addr),
     .ch1_dout(ch1_dout),
@@ -102,6 +104,31 @@ sdram #(.CLK_MHZ(CLK_MHZ)) sdram
     );
 
 assign SDRAM_CLK = clk_ram;
+
+//////////////////////////////////////////////////////////////////////
+// Video signal generator
+
+localparam [11:0] LEFT_BL_CLOCKS = 12'd457;
+localparam [11:0] DISP_CLOCKS = 12'd2160;
+localparam [11:0] LINE_CLOCKS = 12'd2730;
+logic [11:0] h_cnt = '0;
+wire h_wrap = h_cnt == (LINE_CLOCKS - 1'd1);
+logic hbl_ff = '0;
+
+always @(posedge clk_sys) begin
+    if (~h_wrap)
+        h_cnt <= h_cnt + 1'd1;
+    else
+        h_cnt <= '0;
+
+    if (h_cnt == LEFT_BL_CLOCKS)
+        hbl_ff <= '0;
+    else if (h_cnt == LEFT_BL_CLOCKS + DISP_CLOCKS)
+        hbl_ff <= '1;
+
+    hblank <= hbl_ff;
+end
+
 
 //////////////////////////////////////////////////////////////////////
 // Traffic generator

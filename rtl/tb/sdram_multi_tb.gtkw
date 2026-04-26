@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v4.0.0-prealpha (8ba24ab+) (w)1999-2022 BSI
-[*] Mon Apr 20 01:32:54 2026
+[*] Sun Apr 26 04:44:02 2026
 [*]
-[dumpfile] "/Users/dhunter/src/mister/Test_V810_MiSTer/rtl/tb/sdram_multi_tb.vcd"
-[dumpfile_mtime] "Mon Apr 20 01:30:09 2026"
-[dumpfile_size] 16088769
-[savefile] "/Users/dhunter/src/mister/Test_V810_MiSTer/rtl/tb/sdram_multi_tb.gtkw"
-[timestart] 150874
+[dumpfile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/sdram_multi_tb.vcd"
+[dumpfile_mtime] "Sun Apr 26 04:42:58 2026"
+[dumpfile_size] 16562123
+[savefile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/sdram_multi_tb.gtkw"
+[timestart] 161532
 [size] 1333 600
 [pos] -1 -1
-*-6.387208 150310 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+*-5.423326 161610 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 [markername] AA
 [markername] BB
 [markername] CC
@@ -37,7 +37,6 @@
 [markername] YY
 [markername] ZZ
 [treeopen] sdram_multi_tb.
-[treeopen] sdram_multi_tb.sdram.
 [treeopen] sdram_multi_tb.sdrb.
 [sst_width] 255
 [signals_width] 261
@@ -45,8 +44,12 @@
 [sst_vpaned_height] 159
 @28
 sdram_multi_tb.sdram.init
+sdram_multi_tb.hblank
+@24
+sdram_multi_tb.sdram.state[1:0]
+@29
+sdram_multi_tb.sdram.refresh_sys
 @22
-sdram_multi_tb.sdram.state[3:0]
 sdram_multi_tb.sdram.refresh_count[13:0]
 sdram_multi_tb.sdram.refresh_wait[3:0]
 sdram_multi_tb.sdram.ch1_addr[26:0]
@@ -88,14 +91,14 @@ sdram_multi_tb.sdram.ba1.st[3:0]
 sdram_multi_tb.sdram.ba1.wcnt[3:0]
 @200
 -ba2
-@23
-sdram_multi_tb.sdram.ba2.creq[3:0]
 @22
+sdram_multi_tb.sdram.ba2.creq[3:0]
 sdram_multi_tb.sdram.ba2.dreq[3:0]
 @24
 sdram_multi_tb.sdram.ba2.st[3:0]
 @22
 sdram_multi_tb.sdram.ba2.wcnt[3:0]
+sdram_multi_tb.sdram.baidle[3:0]
 @24
 sdram_multi_tb.sdram.bbsba[1:0]
 @22

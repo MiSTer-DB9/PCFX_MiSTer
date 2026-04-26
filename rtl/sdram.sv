@@ -26,6 +26,7 @@ module sdram
 (
     input             init,        // reset to initialize RAM
     input             clk,         // clock ~100MHz
+    input             hblank,      // good time to do refresh
 
     inout      [15:0] SDRAM_DQ,    // 16 bit bidirectional data bus
     output reg [12:0] SDRAM_A,     // 13 bit multiplexed address bus
@@ -73,12 +74,22 @@ localparam startup_mode_cnt    = startup_refresh_max - 7;
 localparam startup_ref2_cnt    = 14'(startup_mode_cnt - TRC_MIN);
 localparam startup_ref1_cnt    = 14'(startup_ref2_cnt - TRC_MIN);
 localparam startup_pchg_cnt    = 14'(startup_ref1_cnt - TRP_MIN);
-
+localparam refresh_per_hbl     = 4'd7; // assumes hblank every 54 us
+localparam refresh_sys_wcnt_cnt = 8'(ns_to_cyc(int'(11e3 / (refresh_per_hbl - 1)))); // assumes hblank lasts 11us
 reg [13:0] refresh_count = startup_refresh_max - sdram_startup_cycles;
+reg        refresh_due = '0;
+reg [3:0]  refresh_credit = '0;
 reg  [3:0] refresh_wait;
+reg [3:0]  refresh_sys_cnt = '0;
+reg        refresh_sys = '0;
+reg [7:0]  refresh_sys_wcnt = '0;
+logic      refresh_start;
 reg  [2:0] command;
 
+logic      hblank_d;
+
 logic [3:0]  baidle; // bank idle status
+logic        bapause;
 // bacreq, badreq are bitmaps of future bus cycles required, LSB first
 logic [3:0]  bacreq [4]; // cmd bus cycle request bitmap
 logic [3:0]  badreq [4]; // data bus cycle request bitmap
@@ -106,15 +117,37 @@ logic [15:0] dqi, dqo;
 logic        dqoe;
 
 localparam STATE_STARTUP = 0;
-localparam STATE_WAIT    = 1;
-localparam STATE_RW1     = 2;
-localparam STATE_RW2     = 3;
-localparam STATE_ACTIVE  = 4;
-localparam STATE_REFRESH = 5;
+localparam STATE_ACTIVE  = 1;
+localparam STATE_REFRESH = 2;
 
-reg  [3:0] state = STATE_STARTUP;
+reg  [1:0] state = STATE_STARTUP;
 
-wire bapause = state != STATE_ACTIVE || refresh_count > cycles_per_refresh;
+assign refresh_start = refresh_due | refresh_sys;
+assign bapause = state != STATE_ACTIVE || refresh_start;
+
+// HBlank-driven refresh
+always @(posedge clk) begin
+    hblank_d <= hblank;
+
+    if ((state != STATE_STARTUP) & hblank & ~hblank_d) begin
+        refresh_sys_cnt <= refresh_per_hbl;
+    end
+
+    if (refresh_sys_cnt != 0) begin
+        if (~refresh_sys && refresh_sys_wcnt == 0) begin
+            refresh_sys <= '1;
+            refresh_sys_wcnt <= refresh_sys_wcnt_cnt;
+        end
+        else if (refresh_sys && state == STATE_REFRESH) begin
+            refresh_sys <= '0;
+            refresh_sys_cnt <= refresh_sys_cnt - 1'd1;
+        end
+    end
+
+    if (refresh_sys_wcnt != 0) begin
+        refresh_sys_wcnt <= refresh_sys_wcnt - 1'd1;
+    end
+end
 
 // Bank submodules
 sdram_bank #(CLK_MHZ) ba0
@@ -306,7 +339,10 @@ always @(posedge clk) begin
             if (refresh_wait == 4'(TRC_MIN)) begin
                 // Start the refresh cycle.
                 command  <= CMD_AUTO_REFRESH;
-                refresh_count <= refresh_count - cycles_per_refresh + 1'd1;
+                if (refresh_due)
+                    refresh_due <= '0;
+                else if (~&refresh_credit)
+                    refresh_credit <= refresh_credit + 1'd1;
                 refresh_wait <= refresh_wait - 1'd1;
             end
             else begin
@@ -321,10 +357,18 @@ always @(posedge clk) begin
             SDRAM_A  <= bar_a[bbsba];
             command  <= bar_cmd[bbsba];
 
-            if (&baidle && refresh_count > cycles_per_refresh) begin
+            if (&baidle & refresh_start) begin
                 // Priority is to issue a refresh if one is outstanding
                 state <= STATE_REFRESH;
                 refresh_wait <= 4'(TRC_MIN);
+            end
+
+            if (~refresh_due && refresh_count > cycles_per_refresh) begin
+                refresh_count <= refresh_count - cycles_per_refresh + 1'd1;
+                if (refresh_credit != 0)
+                    refresh_credit <= refresh_credit - 1'd1;
+                else
+                    refresh_due <= '1;
             end
         end
     endcase

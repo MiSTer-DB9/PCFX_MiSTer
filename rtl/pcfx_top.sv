@@ -100,6 +100,7 @@ sdram #(.CLK_MHZ(CLK_RAM_MHZ)) sdram
 
     .init(~pll_locked),
     .clk(clk_ram),
+    .hblank(HBlank),
 
     .ch1_addr(sdram_ch1_addr),
     .ch1_dout(sdram_ch1_dout),
