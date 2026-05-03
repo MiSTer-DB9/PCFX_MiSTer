@@ -113,7 +113,7 @@ initial #0 begin
 
     load_kreg();
 
-    #(1e3) $finish;
+    #(2e3) $finish;
 end
 
 endmodule

@@ -55,7 +55,13 @@ logic [17:0]        mpe_ra;
 logic               mpe_ren;
 logic [1:0]         mpe_layer;
 
-assign mpe_d = FETCH ? MPRBUF : 9'h100;
+assign mpe_d = (rf_bgm.mpsw & FETCH) ? MPRBUF : 9'h100;
+
+function mpe_rd_en(mpd_t mpd);
+rf_bgp_t bgp;
+    bgp = get_bgp(mpd.layer);
+    mpe_rd_en = |bgp.prio & ~mpd.nop;
+endfunction
 
 function [17:0] mpe_addr(mpd_t mpd);
 logic [7:0] base;
@@ -73,7 +79,7 @@ rf_bgp_t bgp;
 endfunction
 
 always @(posedge CLK) begin
-    mpe_ren <= ~mpe_d.nop;
+    mpe_ren <= mpe_rd_en(mpe_d);
     mpe_layer <= mpe_d.layer;
     mpe_ra <= mpe_addr(mpe_d);
 end

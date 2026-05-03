@@ -117,9 +117,11 @@ logic [2:0]         mpra;
 assign mpra = fetch ? fetch_bg_col[2:0] : '0;
 
 always @(posedge CLK) begin
-    mprbufa <= mpd[0][mpra];
-    mprbufb <= mpd[1][mpra];
-    if (rf_bgm.mpwr)
+    if (rf_bgm.mpsw) begin
+        mprbufa <= mpd[0][mpra];
+        mprbufb <= mpd[1][mpra];
+    end
+    else if (rf_bgm.mpwr)
         mpd[rf_bgm.mpwa[3]][rf_bgm.mpwa[2:0]] <= rf_bgm.mpwd;
 end
 
