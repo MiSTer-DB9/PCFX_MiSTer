@@ -66,9 +66,9 @@ typedef struct packed {
     logic bg71;
     logic [3:0] bmg;
     logic sp;
-    logic bp;
+    logic bg;
     logic sp256;
-    logic bp256;
+    logic bg256;
     logic [1:0] rsv4;
     logic dc7;
     logic ex;
@@ -296,7 +296,7 @@ assign DCKKR_NEGEDGE = ckenkr_ne;
 //////////////////////////////////////////////////////////////////////
 // Video mixer, palette index
 
-logic             vdc_key;
+logic             vdc_en, vdc_key;
 logic [8:0]       vdc_vd;
 logic [8:1]       vdc_cpao;
 logic [8:0]       vdc_cpa;
@@ -306,7 +306,8 @@ wire vdc0_key = VDC0_VD[7:0] == '0;
 wire vdc1_key = VDC1_VD[7:0] == '0;
 
 // "Upper" 6270 has priority over "lower".
-assign vdc_key = vdc0_key & vdc1_key;
+assign vdc_en = vdc_vd[8] ? cr.sp : cr.bg;
+assign vdc_key = ~vdc_en | (vdc0_key & vdc1_key);
 assign vdc_vd = vdc1_key ? VDC0_VD : VDC1_VD;
 
 // Palette RAM address generator
@@ -346,8 +347,13 @@ dpram #(.addr_width(9), .data_width(16)) cpram
 //////////////////////////////////////////////////////////////////////
 // Video mixer, YUV
 
+logic           mmc_en, mmc_key;
 logic           mix_vdc_key;
 logic [7:0]     mix_out_y, mix_out_u, mix_out_v;
+
+// TODO: key by plane
+assign mmc_en = cr.bmg[0];
+assign mmc_key = ~mmc_en | ~|MMC_VD[16+:8];
 
 always @(posedge CLK) if (DCK70) begin
     mix_vdc_key <= vdc_key;
@@ -355,7 +361,10 @@ end
 
 // TODO: Use pri_ registers
 always @* begin
-    {mix_out_y, mix_out_u, mix_out_v} = MMC_VD;
+    {mix_out_y, mix_out_u, mix_out_v} = {8'd0, 8'd128, 8'd128};
+
+    if (~mmc_key)
+        {mix_out_y, mix_out_u, mix_out_v} = MMC_VD;
 
     if (~vdc_key) begin
         mix_out_y = cp_out[8+:8];
