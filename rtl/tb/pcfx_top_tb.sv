@@ -28,7 +28,10 @@ initial begin
     $dumpfile("pcfx_top_tb.vcd");
     $dumpvars();
 `else
-    #(215e3) $dumpfile("pcfx_top_tb.verilator.fst");
+    $dumpfile("pcfx_top_tb.verilator.fst");
+    //repeat (3) #(1000e3) ;
+    //#(700e3) ;
+    #(200e3) ;
     $dumpvars();
 `endif
 end
@@ -512,7 +515,8 @@ end
 
 initial begin
     @(running) ;
-    //repeat (4) #(1000e3) ;
+    //repeat (3) #(1000e3) ;
+    //#(719e3) ;
     #(230e3) ;
 
 `ifdef SAVE_SRAMS

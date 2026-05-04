@@ -1,6 +1,6 @@
 // HuC6261 (NEW Iron Guanyin)
 //
-// Copyright (c) 2025 David Hunter
+// Copyright (c) 2025-2026 David Hunter
 //
 // This program is GPL licensed. See COPYING for the full license.
 
@@ -62,6 +62,8 @@ localparam [8:0] DISP_LINES_E = 9'd242;
 localparam [8:0] TOP_BL_LINES = TOP_BL_LINES_E;
 localparam [8:0] DISP_LINES = DISP_LINES_E;
 
+localparam NL = 3;
+
 typedef struct packed {
     logic bg71;
     logic [3:0] bmg;
@@ -75,6 +77,13 @@ typedef struct packed {
     logic [1:0] dcc;
 } cr_t;
 
+typedef struct packed {
+    logic [2:0]     pri;
+    logic           key;
+    logic [23:0]    vd;
+    logic           pal;
+} layer_t;
+
 logic [4:0]     ar;
 logic [11:0]    h_cnt;
 logic [8:0]     v_cnt;
@@ -86,6 +95,8 @@ logic           cpd_wr, cpd_wr_d;
 logic [7:0]     vdc_sp_cpao, vdc_bg_cpao;
 logic [2:0]     pri_vdc_bg, pri_vdc_sp, pri_vpu,
                 pri_mmc_bg0, pri_mmc_bg1, pri_mmc_bg2, pri_mmc_bg3;
+
+layer_t         layers [NL+1];
 
 //////////////////////////////////////////////////////////////////////
 // Register interface
@@ -294,31 +305,93 @@ assign DCKKR = ckenkr;
 assign DCKKR_NEGEDGE = ckenkr_ne;
 
 //////////////////////////////////////////////////////////////////////
-// Video mixer, palette index
+// VDC MUX
 
 logic             vdc_en, vdc_key;
 logic [8:0]       vdc_vd;
-logic [8:1]       vdc_cpao;
-logic [8:0]       vdc_cpa;
-logic [8:0]       mix_cpa_out;
+logic             vdc_spbg;
+logic [8:0]       vdc_cpa_bg, vdc_cpa_sp;
 
-wire vdc0_key = VDC0_VD[7:0] == '0;
-wire vdc1_key = VDC1_VD[7:0] == '0;
+wire vdc0_key = VDC0_VD[7:0] != '0;
+wire vdc1_key = VDC1_VD[7:0] != '0;
 
 // "Upper" 6270 has priority over "lower".
-assign vdc_en = vdc_vd[8] ? cr.sp : cr.bg;
-assign vdc_key = ~vdc_en | (vdc0_key & vdc1_key);
-assign vdc_vd = vdc1_key ? VDC0_VD : VDC1_VD;
+assign vdc_vd = ~vdc1_key ? VDC0_VD : VDC1_VD;
+assign vdc_spbg = vdc_vd[8];
+assign vdc_en = vdc_spbg ? cr.sp : cr.bg;
+assign vdc_key = vdc_en & (vdc0_key | vdc1_key);
 
+assign vdc_cpa_bg = {vdc_bg_cpao, 1'b0} + {1'b0, vdc_vd[7:0]};
+assign vdc_cpa_sp = {vdc_sp_cpao, 1'b0} + {1'b0, vdc_vd[7:0]};
+
+assign layers[0].pri = pri_vdc_bg;
+assign layers[0].key = ~vdc_spbg & vdc_key;
+assign layers[0].vd  = 24'(vdc_cpa_bg);
+assign layers[0].pal = '1;
+assign layers[1].pri = pri_vdc_sp;
+assign layers[1].key = vdc_spbg & vdc_key;
+assign layers[1].vd  = 24'(vdc_cpa_sp);
+assign layers[1].pal = '1;
+
+//////////////////////////////////////////////////////////////////////
+// MMC (KING) video input
+
+logic           mmc_en, mmc_key;
+
+assign mmc_en = cr.bmg[0];
+assign mmc_key = mmc_en & |MMC_VD[16+:8];
+
+// MMC BG0
+assign layers[2].pri = pri_mmc_bg0;
+assign layers[2].key = mmc_key;
+assign layers[2].vd  = MMC_VD;
+assign layers[2].pal = '0;
+
+//////////////////////////////////////////////////////////////////////
+// Layer priority encoder
+
+logic [$clog2(NL+1)-1:0]    prio_out;
+logic [2:0]                 prio_pri [NL];
+logic [NL-1:0]              prio_key;
+
+// Background for when all layers are transparent
+assign layers[NL].pri = '0;
+assign layers[NL].key = '1;
+assign layers[NL].vd  = '0;
+assign layers[NL].pal = '1;
+
+genvar i;
+generate
+    for (i = 0; i < NL; i++) begin :prio_layers
+        assign prio_pri[i] = layers[i].pri;
+        assign prio_key[i] = layers[i].key;
+    end
+endgenerate
+
+huc6261_prio #(.N(NL)) prio
+   (
+    .CLK(CLK),
+    .PRI(prio_pri),
+    .KEY(prio_key),
+    .OUT(prio_out)
+    );
+
+//////////////////////////////////////////////////////////////////////
+// Video layer MUX
+
+layer_t vmux;
+
+assign vmux = layers[prio_out];
+
+//////////////////////////////////////////////////////////////////////
 // Palette RAM address generator
-assign vdc_cpao = vdc_vd[8] ? vdc_sp_cpao : vdc_bg_cpao;
-assign vdc_cpa = {vdc_cpao, 1'b0} + {1'b0, vdc_vd[7:0]};
 
-// Chromakey (transparency) priority encoder
+logic [8:0]       cpa_out;
+
 always @* begin
-    mix_cpa_out = '0;
-    if (~vdc_key)
-        mix_cpa_out = vdc_cpa;
+    cpa_out = '0;
+    if (vmux.pal)
+        cpa_out = vmux.vd[8:0];
 end
 
 //////////////////////////////////////////////////////////////////////
@@ -336,7 +409,7 @@ dpram #(.addr_width(9), .data_width(16)) cpram
     .q_a(cpdout),
     .cs_a(1'b1),
 
-    .address_b(mix_cpa_out),
+    .address_b(cpa_out),
     .data_b('0),
     .enable_b(1'b1),
     .wren_b('0),
@@ -347,30 +420,21 @@ dpram #(.addr_width(9), .data_width(16)) cpram
 //////////////////////////////////////////////////////////////////////
 // Video mixer, YUV
 
-logic           mmc_en, mmc_key;
-logic           mix_vdc_key;
+logic [23:0]    mix_vd;
 logic [7:0]     mix_out_y, mix_out_u, mix_out_v;
 
-// TODO: key by plane
-assign mmc_en = cr.bmg[0];
-assign mmc_key = ~mmc_en | ~|MMC_VD[16+:8];
-
-always @(posedge CLK) if (DCK70) begin
-    mix_vdc_key <= vdc_key;
+always @(posedge CLK) begin
+    mix_vd <= vmux.vd;
 end
 
-// TODO: Use pri_ registers
 always @* begin
-    {mix_out_y, mix_out_u, mix_out_v} = {8'd0, 8'd128, 8'd128};
-
-    if (~mmc_key)
-        {mix_out_y, mix_out_u, mix_out_v} = MMC_VD;
-
-    if (~vdc_key) begin
+    if (vmux.pal) begin
         mix_out_y = cp_out[8+:8];
         mix_out_u = {cp_out[7:4], cp_out[6:4], cp_out[6]};
         mix_out_v = {cp_out[3:0], cp_out[2:0], cp_out[2]};
     end
+    else
+        {mix_out_y, mix_out_u, mix_out_v} = mix_vd;
 end
 
 //////////////////////////////////////////////////////////////////////
@@ -431,3 +495,5 @@ always @(posedge CLK) if (DCK70) begin
 end
 
 endmodule
+
+`include "huc6261_prio.sv"
