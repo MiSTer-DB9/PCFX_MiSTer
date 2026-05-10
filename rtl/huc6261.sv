@@ -96,7 +96,7 @@ logic [7:0]     vdc_sp_cpao, vdc_bg_cpao;
 logic [2:0]     pri_vdc_bg, pri_vdc_sp, pri_vpu,
                 pri_mmc_bg0, pri_mmc_bg1, pri_mmc_bg2, pri_mmc_bg3;
 
-layer_t         layers [NL+1];
+layer_t [NL:0]  layers;
 
 //////////////////////////////////////////////////////////////////////
 // Register interface
