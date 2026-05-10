@@ -1,4 +1,4 @@
-// KING video render testbench
+// NEW Iron Guanyin video render testbench
 //
 // Copyright (c) 2026 David Hunter
 //
@@ -6,12 +6,12 @@
 
 `timescale 1us / 1ns
 
-module huc6272_video_render_tb;
+module huc6261_video_render_tb;
 
 initial begin
     $timeformat(-6, 0, " us", 1);
 
-    $dumpfile("huc6272_video_render_tb.vcd");
+    $dumpfile("huc6261_video_render_tb.vcd");
     $dumpvars();
 end
 
@@ -23,13 +23,13 @@ integer fpic;
 logic   pice;
 
 initial begin
-    fpic = $fopen("huc6272_video_render.hex", "w");
+    fpic = $fopen("huc6261_video_render.hex", "w");
     pice = 0;
 end
 always @(posedge clk) begin
     if (dck) begin
-        if (mmc_vde) begin
-            $fwrite(fpic, "%x", mmc_vd);
+        if (vce_vde) begin
+            $fwrite(fpic, "%x", vce_vd);
             pice = 1;
         end
         else if (pice) begin
@@ -43,9 +43,51 @@ final
 
 //////////////////////////////////////////////////////////////////////
 
+task load_vce_reg();
+    io_sel = VCE;
+    reg_write(7'h00, 16'h0700); // CR
+    reg_write(7'h04, 16'h0800); // CPAO1
+    reg_write(7'h08, 16'h4567); // PR1
+    reg_write(7'h09, 16'h0123); // PR2
+
+    // Palette
+    //reg_write(7'h01, 16'h0000); // addr = 0
+    //reg_write(7'h02, 16'h0000); // ent[0]
+endtask
+
+task load_vdc0_reg();
+    io_sel = VDC0;
+    reg_write(7'h05, 16'h00c8); // CR
+    reg_write(7'h06, 16'h0000); // RCR
+    reg_write(7'h07, 16'h0000); // BXR
+    reg_write(7'h08, 16'h0000); // BYR
+    reg_write(7'h09, 16'h0050); // MWR
+    reg_write(7'h0a, 16'h0202); // HSR
+    reg_write(7'h0b, 16'h041f); // HDR
+    reg_write(7'h0c, 16'h1102); // VPR
+    reg_write(7'h0d, 16'h00ef); // VDR
+    reg_write(7'h0e, 16'h0002); // VCR
+    reg_write(7'h13, 16'h7f00); // DVSSR
+endtask
+
+task load_vdc1_reg();
+    io_sel = VDC1;
+    reg_write(7'h05, 16'h00c0); // CR
+    reg_write(7'h06, 16'h0000); // RCR
+    reg_write(7'h07, 16'h0000); // BXR
+    reg_write(7'h08, 16'hfff8); // BYR
+    reg_write(7'h09, 16'h0050); // MWR
+    reg_write(7'h0a, 16'h0202); // HSR
+    reg_write(7'h0b, 16'h041f); // HDR
+    reg_write(7'h0c, 16'h1102); // VPR
+    reg_write(7'h0d, 16'h00ef); // VDR
+    reg_write(7'h0e, 16'h0002); // VCR
+    reg_write(7'h13, 16'h7f00); // DVSSR
+endtask
+
 task load_kreg();
-    io_sel = MMC;
     // KING BG
+    io_sel = MMC;
     reg_write(7'h10, 16'h0005); // Mode
     reg_write(7'h12, 16'h0004); // Prio
     reg_write(7'h16, 16'h0001); // ScrM
@@ -106,20 +148,38 @@ endtask
 //////////////////////////////////////////////////////////////////////
 
 initial #0 begin
+    $readmemh("vram0.hex", vram0.mem);
+    $readmemh("vram1.hex", vram1.mem);
+    $readmemh("vce_cp.hex", vce.cpram.mem);
     vram_load_file("kram0.bin", 0);
     vram_load_file("kram1.bin", 1);
 
     #10 @(posedge clk) reset <= 0;
     #2 @(posedge clk) ;
 
+    load_vce_reg();
+    load_vdc0_reg();
+    load_vdc1_reg();
     load_kreg();
 
-    #(2e3) $finish;
+    // Advance a frame to trigger V-Blank actions like SATB copy.
+    @(posedge vsync_negedge) ;
+    repeat (2) @(posedge hsync_negedge) ;
+    vdc0.DISP_CNT = 10'h014;
+    vdc1.DISP_CNT = 10'h014;
+    repeat (2) @(posedge hsync_negedge) ;
+    vdc0.DISP_CNT = 10'h104;
+    vdc1.DISP_CNT = 10'h104;
+    vce.v_cnt = 9'h106;
+    mmc.video.row = 10'h103;
+    @(posedge hsync_negedge) ;
+
+    #(15e3) $finish;
 end
 
 endmodule
 
 
 // Local Variables:
-// compile-command: "iverilog -g2012 -grelative-include -s huc6272_video_render_tb -DHUC6272_DMC_ENABLE -o huc6272_video_render_tb.vvp ../huc6272.sv ../huc6261.sv dpram.sv pd424260.sv huc6272_video_render_tb.sv && ./huc6272_video_render_tb.vvp && python3 yuv_render2png.py huc6272_video_render.hex huc6272_video_render.png 256 242"
+// compile-command: "iverilog -g2012 -grelative-include -s huc6261_video_render_tb -DHUC6272_DMC_ENABLE -DTB_VDC -o huc6261_video_render_tb.vvp ../huc6272.sv ../huc6261.sv ../huc6270.sv dpram.sv pd424260.sv huc6261_video_render_tb.sv && ./huc6261_video_render_tb.vvp && python3 yuv_render2png.py huc6261_video_render.hex huc6261_video_render.png 270 242"
 // End:

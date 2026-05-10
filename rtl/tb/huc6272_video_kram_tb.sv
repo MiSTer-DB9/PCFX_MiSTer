@@ -15,11 +15,12 @@ initial begin
     $dumpvars();
 end
 
-`include "huc6272_dut_kram_vce.svh"
+`include "mmc_kram_vce.svh"
 
 //////////////////////////////////////////////////////////////////////
 
 task load_kreg();
+    io_sel = MMC;
     // KING BG
     reg_write(7'h10, 16'h0005); // Mode
     reg_write(7'h12, 16'h0004); // Prio
@@ -84,9 +85,9 @@ initial #0 begin
     write_verify(1'b1, 18'h00000, 32);
     write_verify(1'b1, 18'h3FFE0, 32);
 
-    @(posedge dut.video.render) ;
+    @(posedge mmc.video.render) ;
     write_verify(1'b0, 18'h00000, 32);
-    @(posedge dut.video.render) ;
+    @(posedge mmc.video.render) ;
     write_verify(1'b1, 18'h00000, 32);
 
     #(1e3) $finish;

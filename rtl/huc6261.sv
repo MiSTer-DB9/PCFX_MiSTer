@@ -441,7 +441,7 @@ end
 // Sync generators
 
 logic [11:0]    hsync_start_pos, hsync_end_pos;
-logic           hbl_ff, vbl_ff;
+logic           hbl_ff = '1, vbl_ff = '1;
 
 always @* begin
     hsync_start_pos = (cr.dc7 ? (LINE_CLOCKS - 12'd6) : 12'd8) - 1'd1;
