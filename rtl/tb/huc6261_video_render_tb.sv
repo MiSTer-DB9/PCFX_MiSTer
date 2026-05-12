@@ -47,8 +47,17 @@ task load_vce_reg();
     io_sel = VCE;
     reg_write(7'h00, 16'h0700); // CR
     reg_write(7'h04, 16'h0800); // CPAO1
-    reg_write(7'h08, 16'h4567); // PR1
-    reg_write(7'h09, 16'h0123); // PR2
+    reg_write(7'h08, 16'h0567); // PR1
+    reg_write(7'h09, 16'h0004); // PR2
+    reg_write(7'h0d, 16'hFF88); // CCR
+    reg_write(7'h0e, 16'h0008); // BLE
+    reg_write(7'h0f, 16'h0100); // SPBL
+    reg_write(7'h10, 16'h0000); // BL1A
+    reg_write(7'h11, 16'h0888); // BL1B
+    reg_write(7'h12, 16'h0222); // BL2A
+    reg_write(7'h13, 16'h0666); // BL2B
+    reg_write(7'h14, 16'h0000); // BL3A
+    reg_write(7'h15, 16'h0000); // BL3B
 
     // Palette
     //reg_write(7'h01, 16'h0000); // addr = 0
