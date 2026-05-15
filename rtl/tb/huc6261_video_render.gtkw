@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v4.0.0-prealpha (8ba24ab+) (w)1999-2022 BSI
-[*] Tue May 12 04:46:18 2026
+[*] Fri May 15 04:44:32 2026
 [*]
 [dumpfile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/huc6261_video_render_tb.vcd"
-[dumpfile_mtime] "Tue May 12 04:45:50 2026"
-[dumpfile_size] 341812845
+[dumpfile_mtime] "Fri May 15 04:44:32 2026"
+[dumpfile_size] 125861888
 [savefile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/huc6261_video_render.gtkw"
-[timestart] 12969610
+[timestart] 13001708
 [size] 1333 600
 [pos] -1 -1
-*-7.824339 12970260 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+*-7.829422 13002540 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 [markername] AA
 [markername] BB
 [markername] CC
@@ -37,15 +37,14 @@
 [markername] YY
 [markername] ZZ
 [treeopen] huc6261_video_render_tb.
+[treeopen] huc6261_video_render_tb.vce.
 [sst_width] 255
 [signals_width] 229
 [sst_expanded] 1
 [sst_vpaned_height] 159
 @22
 huc6261_video_render_tb.vce.vmux[30:0]
-@23
 huc6261_video_render_tb.vce.mix_vd[23:0]
-@22
 huc6261_video_render_tb.vce.spbl[15:0]
 @28
 huc6261_video_render_tb.vdc0.DMAS_EXEC
@@ -59,13 +58,18 @@ huc6261_video_render_tb.vdc0.VDISP_END_POS[9:0]
 huc6261_video_render_tb.vdc0.HSYNC_F
 huc6261_video_render_tb.vdc0.VSYNC_F
 huc6261_video_render_tb.vce.VBL
+huc6261_video_render_tb.vce.HBL
 @22
 huc6261_video_render_tb.vce.v_cnt[8:0]
+huc6261_video_render_tb.vce.h_cnt[11:0]
 huc6261_video_render_tb.mmc.video.row[9:0]
 @28
 huc6261_video_render_tb.vce.prio_out[1:0]
 huc6261_video_render_tb.vce.CLK
 huc6261_video_render_tb.vce.ckenf
+@29
+huc6261_video_render_tb.vce.DCK70
+@28
 huc6261_video_render_tb.vce.ckenkr
 huc6261_video_render_tb.vce.prio_sel[1:0]
 huc6261_video_render_tb.vce.vmux_low_chroma

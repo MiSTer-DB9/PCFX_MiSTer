@@ -682,16 +682,22 @@ always @* begin
     ccdp_reg1_en = '0;
     ccdp_low_chroma = '0;
 
-    if (ccdp_phase < 2'd3) begin
-        prio_sel = ccdp_phase;
-        ccdp_reg1_en = mix.key;
-        ccdp_sel1_ccr = '0;
-        ccdp_sel2_cc = mix.cpe != CPE_OFF;
-    end
-    if (ccdp_phase == 2'd0 && !(ble.ed & ~ble.fb)) begin
-        // Special case for lowest priority layer
-        ccdp_low_chroma = '1;
+    if (cr.dc7) begin
+        prio_sel = 2'd2;
         ccdp_reg1_en = '1;
+    end
+    else begin
+        if (ccdp_phase < 2'd3) begin
+            prio_sel = ccdp_phase;
+            ccdp_reg1_en = mix.key;
+            ccdp_sel1_ccr = '0;
+            ccdp_sel2_cc = mix.cpe != CPE_OFF;
+        end
+        if (ccdp_phase == 2'd0 && !(ble.ed & ~ble.fb)) begin
+            // Special case for lowest priority layer
+            ccdp_low_chroma = '1;
+            ccdp_reg1_en = '1;
+        end
     end
 end
 
