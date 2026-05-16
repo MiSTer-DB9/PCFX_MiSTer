@@ -1,0 +1,87 @@
+[*]
+[*] GTKWave Analyzer v3.4.0 (w)1999-2022 BSI
+[*] Fri Apr  3 04:41:26 2026
+[*]
+[dumpfile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/as4c32m16sb_tb.vcd"
+[dumpfile_mtime] "Fri Apr  3 04:40:23 2026"
+[dumpfile_size] 17299
+[savefile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/as4c32m16sb_tb.gtkw"
+[timestart] 721
+[size] 1333 600
+[pos] -1 -1
+*-6.652879 950 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+[markername] AA
+[markername] BB
+[markername] CC
+[markername] DD
+[markername] EE
+[markername] FF
+[markername] GG
+[markername] HH
+[markername] II
+[markername] JJ
+[markername] KK
+[markername] LL
+[markername] MM
+[markername] NN
+[markername] OO
+[markername] PP
+[markername] QQ
+[markername] RR
+[markername] SS
+[markername] TT
+[markername] UU
+[markername] VV
+[markername] WW
+[markername] XX
+[markername] YY
+[markername] ZZ
+[treeopen] as4c32m16sb_tb.
+[sst_width] 255
+[signals_width] 261
+[sst_expanded] 1
+[sst_vpaned_height] 159
+@28
+as4c32m16sb_tb.dut.CLK
+@22
+as4c32m16sb_tb.dut.A[12:0]
+@28
+as4c32m16sb_tb.dut.BA[1:0]
+as4c32m16sb_tb.dut.nCS
+as4c32m16sb_tb.dut.nRAS
+as4c32m16sb_tb.dut.nCAS
+as4c32m16sb_tb.dut.nWE
+@23
+as4c32m16sb_tb.dut.DQ[15:0]
+@28
+as4c32m16sb_tb.dut.DQML
+as4c32m16sb_tb.dut.DQMH
+as4c32m16sb_tb.dut.cmd[3:0]
+@24
+as4c32m16sb_tb.dut.trrd_cnt
+as4c32m16sb_tb.dut.trc_cnt0[31:0]
+as4c32m16sb_tb.dut.trc_cnt1[31:0]
+as4c32m16sb_tb.dut.trc_cnt2[31:0]
+as4c32m16sb_tb.dut.trc_cnt3[31:0]
+as4c32m16sb_tb.dut.trcd_cnt0[31:0]
+as4c32m16sb_tb.dut.trcd_cnt1[31:0]
+as4c32m16sb_tb.dut.trcd_cnt2[31:0]
+as4c32m16sb_tb.dut.trcd_cnt3[31:0]
+as4c32m16sb_tb.dut.trp_cnt0[31:0]
+as4c32m16sb_tb.dut.trp_cnt1[31:0]
+as4c32m16sb_tb.dut.trp_cnt2[31:0]
+as4c32m16sb_tb.dut.trp_cnt3[31:0]
+as4c32m16sb_tb.dut.tras_cnt0[31:0]
+as4c32m16sb_tb.dut.tras_cnt1[31:0]
+as4c32m16sb_tb.dut.tras_cnt2[31:0]
+as4c32m16sb_tb.dut.tras_cnt3[31:0]
+@22
+as4c32m16sb_tb.dut.prechg[3:0]
+as4c32m16sb_tb.dut.active[3:0]
+as4c32m16sb_tb.dut.row_open[3:0]
+@420
+as4c32m16sb_tb.dut.rd_cnt
+@28
+as4c32m16sb_tb.dut.auto_refresh
+[pattern_trace] 1
+[pattern_trace] 0

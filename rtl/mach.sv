@@ -44,6 +44,24 @@ module mach
    output        MCP_WRn,
    input         MCP_READYn,
 
+   // KRAM bank A memory interface
+   output [17:0] KRAMA_A,
+   input [15:0]  KRAMA_DI,
+   output [15:0] KRAMA_DO,
+   output [1:0]  KRAMA_BE,
+   output        KRAMA_WR,
+   output        KRAMA_REQ,
+   input         KRAMA_ACK,
+
+   // KRAM bank B memory interface
+   output [17:0] KRAMB_A,
+   input [15:0]  KRAMB_DI,
+   output [15:0] KRAMB_DO,
+   output [1:0]  KRAMB_BE,
+   output        KRAMB_WR,
+   output        KRAMB_REQ,
+   input         KRAMB_ACK,
+
    input         hmi_t HMI,
 
    output [31:0] A,
@@ -127,7 +145,8 @@ logic           ga_csn;
 logic [15:0]    ga_do;
 logic           vdc_cpu_ce;
 
-logic           pce, pce_negedge;
+logic           dck70, dck70_negedge;
+logic           dckkr, dckkr_negedge;
 logic           hs_posedge, hs_negedge;
 logic           vs_posedge, vs_negedge;
 
@@ -137,6 +156,9 @@ wire            mmc_irqn;
 wire [15:0]     mmc_do;
 wire [7:0]      mmc_scsi_do;
 wire            mmc_scsi_doe;
+
+logic [23:0]    mmc_vd;
+logic           mmc_vde;
 
 logic [7:0]     scsi_data;
 wire            scsi_atnn, scsi_bsyn, scsi_ackn, scsi_rstn,  scsi_msgn,
@@ -256,8 +278,8 @@ huc6261 vce
      .DI(cpu_d_o[15:0]),
      .DO(vce_do),
 
-     .PCE(pce),
-     .PCE_NEGEDGE(pce_negedge),
+     .DCK70(dck70),
+     .DCK70_NEGEDGE(dck70_negedge),
      .HSYNC_POSEDGE(hs_posedge),
      .HSYNC_NEGEDGE(hs_negedge),
      .VSYNC_POSEDGE(vs_posedge),
@@ -265,6 +287,10 @@ huc6261 vce
 
      .VDC0_VD(vdc0_vd),
      .VDC1_VD(vdc1_vd),
+
+     .DCKKR(dckkr),
+     .DCKKR_NEGEDGE(dckkr_negedge),
+     .MMC_VD(mmc_vd),
 
      .Y(VID_Y),
      .U(VID_U),
@@ -292,8 +318,8 @@ huc6270 vdc0
      .BUSY_N(vdc0_busyn),
      .IRQ_N(vdc0_irqn),
 
-     .DCK_CE(pce),
-     .DCK_CE_F(pce_negedge),
+     .DCK_CE(dck70),
+     .DCK_CE_F(dck70_negedge),
      .HSYNC_F(hs_negedge),
      .HSYNC_R(hs_posedge),
      .VSYNC_F(vs_negedge),
@@ -346,8 +372,8 @@ huc6270 vdc1
      .BUSY_N(vdc1_busyn),
      .IRQ_N(vdc1_irqn),
 
-     .DCK_CE(pce),
-     .DCK_CE_F(pce_negedge),
+     .DCK_CE(dck70),
+     .DCK_CE_F(dck70_negedge),
      .HSYNC_F(hs_negedge),
      .HSYNC_R(hs_posedge),
      .VSYNC_F(vs_negedge),
@@ -397,6 +423,31 @@ huc6272 mmc
      .RDn(ga_rdn),
      .BUSYn(mmc_busyn),
      .IRQn(mmc_irqn),
+
+     .MA_A(KRAMA_A),
+     .MA_DI(KRAMA_DI),
+     .MA_DO(KRAMA_DO),
+     .MA_BE(KRAMA_BE),
+     .MA_WR(KRAMA_WR),
+     .MA_REQ(KRAMA_REQ),
+     .MA_ACK(KRAMA_ACK),
+
+     .MB_A(KRAMB_A),
+     .MB_DI(KRAMB_DI),
+     .MB_DO(KRAMB_DO),
+     .MB_BE(KRAMB_BE),
+     .MB_WR(KRAMB_WR),
+     .MB_REQ(KRAMB_REQ),
+     .MB_ACK(KRAMB_ACK),
+
+     .DCK(dckkr),
+     .DCK_NEGEDGE(dckkr_negedge),
+     .HSYNC_POSEDGE(hs_posedge),
+     .HSYNC_NEGEDGE(hs_negedge),
+     .VSYNC_POSEDGE(vs_posedge),
+     .VSYNC_NEGEDGE(vs_negedge),
+     .VD(mmc_vd),
+     .VDE(mmc_vde),
 
      .SCSI_DI(scsi_data),
      .SCSI_DO(mmc_scsi_do),
@@ -552,7 +603,7 @@ hmi2kp hmi2kp
 //////////////////////////////////////////////////////////////////////
 
 assign A = cpu_a;
-assign VID_PCE = pce;
+assign VID_PCE = dck70;
 
 //////////////////////////////////////////////////////////////////////
 
