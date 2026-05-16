@@ -1,6 +1,5 @@
 sdram_xsds.sv
 as4c32m16sb.sv
-altddio_out.v
 dpram.sv
 
 ../core_pkg.sv
