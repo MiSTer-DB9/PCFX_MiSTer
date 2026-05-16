@@ -1,8 +1,10 @@
-// Placeholder for HuC6272 (KING)
+// HuC6272 (KING)
 //
-// Copyright (c) 2025 David Hunter
+// Copyright (c) 2025-2026 David Hunter
 //
 // This program is GPL licensed. See COPYING for the full license.
+
+`include "huc6272_types.svh"
 
 module huc6272
     (
@@ -10,6 +12,7 @@ module huc6272
      input         CE,
      input         RESn,
 
+     // CPU memory / I/O bus interface
      input [2:1]   A,
      input [15:0]  DI,
      output [15:0] DO,
@@ -19,6 +22,61 @@ module huc6272
      output        BUSYn,
      output        IRQn,
 
+`ifdef HUC6272_DMC_ENABLE
+
+     // DRAM bank A interface
+     input [15:0]  RA_DI,
+     output [15:0] RA_DO,
+     output [8:0]  RA_A,
+     output        RA_OEn,
+     output        RA_WEn,
+     output        RA_RASn,
+     output        RA_LCASn,
+     output        RA_UCASn,
+
+     // DRAM bank B interface
+     input [15:0]  RB_DI,
+     output [15:0] RB_DO,
+     output [8:0]  RB_A,
+     output        RB_OEn,
+     output        RB_WEn,
+     output        RB_RASn,
+     output        RB_LCASn,
+     output        RB_UCASn,
+
+`else // ifndef HUC6272_DMC_ENABLE
+
+     // DRAM bank A memory interface
+     output [17:0] MA_A,
+     input [15:0]  MA_DI,
+     output [15:0] MA_DO,
+     output [1:0]  MA_BE,
+     output        MA_WR,
+     output        MA_REQ,
+     input         MA_ACK,
+
+     // DRAM bank B memory interface
+     output [17:0] MB_A,
+     input [15:0]  MB_DI,
+     output [15:0] MB_DO,
+     output [1:0]  MB_BE,
+     output        MB_WR,
+     output        MB_REQ,
+     input         MB_ACK,
+
+`endif // HUC6272_DMC_ENABLE
+
+     // Video interface
+     input         DCK, // pixel clock enable
+     input         DCK_NEGEDGE,
+     input         HSYNC_POSEDGE,
+     input         HSYNC_NEGEDGE,
+     input         VSYNC_POSEDGE,
+     input         VSYNC_NEGEDGE,
+     output [23:0] VD, // [7:0] = palette data / [23:0] = {Y,U,V}
+     output        VDE, // data enable (not in blanking)
+
+     // SCSI (CD-ROM) interface
      input [7:0]   SCSI_DI,
      output [7:0]  SCSI_DO,
      output        SCSI_DOE,
@@ -33,237 +91,170 @@ module huc6272
      input         SCSI_IOn
      );
 
-logic [6:0]     rsel;
+rf_scsi_t       rf_scsi;
+rf_bgm_t        rf_bgm;
 
-logic [31:0]    dout;
+st_scsi_t       st_scsi;
 
-logic [7:0]     scsi_cur_bus_stat;
-logic [7:0]     scsi_din, scsi_dout, scsi_rxbuf, scsi_txbuf;
+wire            cpuif_m_ba;
+wire [17:0]     cpuif_m_a;
+wire [15:0]     cpuif_m_di, cpuif_m_do;
+wire [1:0]      cpuif_m_be;
+wire            cpuif_m_wr, cpuif_m_req, cpuif_m_ack;
 
-logic           scsi_assert_rst;
-logic           scsi_assert_ack;
-logic           scsi_assert_sel;
-logic           scsi_assert_atn;
-logic           scsi_assert_data;
-logic           scsi_assert_io;
-logic           scsi_assert_cd;
-logic           scsi_assert_msg;
+wire [17:0]     vid_ma_a;
+wire [15:0]     vid_ma_di, vid_ma_do;
+wire [1:0]      vid_ma_be;
+wire            vid_ma_wr, vid_ma_req, vid_ma_ack;
+wire [17:0]     vid_mb_a;
+wire [15:0]     vid_mb_di, vid_mb_do;
+wire [1:0]      vid_mb_be;
+wire            vid_mb_wr, vid_mb_req, vid_mb_ack;
 
-logic           scsi_dma_mode;
-logic           scsi_start_dma_rx, scsi_start_dma_tx;
-logic           scsi_dma_req, scsi_dma_req_set, scsi_dma_req_clr;
-logic           scsi_phase_match;
-
-logic           scsi_reset_int;
-logic           scsi_rxbuf_rd;
-logic           scsi_int_req_act;
+wire [17:0]     dmca_m_a;
+wire [15:0]     dmca_m_di, dmca_m_do;
+wire [1:0]      dmca_m_be;
+wire            dmca_m_wr, dmca_m_req, dmca_m_ack;
+wire [17:0]     dmcb_m_a;
+wire [15:0]     dmcb_m_di, dmcb_m_do;
+wire [1:0]      dmcb_m_be;
+wire            dmcb_m_wr, dmcb_m_req, dmcb_m_ack;
 
 //////////////////////////////////////////////////////////////////////
 // CPU memory / I/O bus interface
 
-always @(posedge CLK) if (CE) begin
-    scsi_start_dma_tx <= '0;
-    scsi_start_dma_rx <= '0;
+huc6272_cpuif cpuif
+   (
+    .*,
 
-    if (~RESn) begin
-        rsel <= '0;
-        scsi_dout <= '0;
-        scsi_assert_rst <= '0;
-        scsi_assert_ack <= '0;
-        scsi_assert_sel <= '0;
-        scsi_assert_atn <= '0;
-        scsi_assert_data <= '0;
-        scsi_assert_io <= '0;
-        scsi_assert_cd <= '0;
-        scsi_assert_msg <= '0;
-        scsi_txbuf <= '0;
-        scsi_dma_mode <= '0;
-    end
-    else begin
-        if (~CSn & ~WRn) begin
-            case (A[2:1])
-                2'b00: begin
-                    rsel <= DI[6:0];
-                end
-                2'b01: ;
-                2'b10: begin
-                    case (rsel)
-                        7'h00: scsi_dout <= DI[7:0];
-                        7'h01: begin
-                            scsi_assert_rst <= DI[7];
-                            scsi_assert_ack <= DI[4];
-                            scsi_assert_sel <= DI[2];
-                            scsi_assert_atn <= DI[1];
-                            scsi_assert_data <= DI[0];
-                        end
-                        7'h02: begin
-                            scsi_dma_mode <= DI[1];
-                        end
-                        7'h03: begin
-                            scsi_assert_msg <= DI[2];
-                            scsi_assert_cd <= DI[1];
-                            scsi_assert_io <= DI[0];
-                        end
-                        7'h05: scsi_start_dma_tx <= '1;
-                        7'h07: scsi_start_dma_rx <= '1;
-                        default: ;
-                    endcase
-                end
-                2'b11: begin
-                    case (rsel)
-                        7'h05: scsi_txbuf <= DI[7:0];
-                        default: ;
-                    endcase
-                end
-            endcase
-        end
-    end
-end
+    .M_BA(cpuif_m_ba),
+    .M_A(cpuif_m_a),
+    .M_DI(cpuif_m_di),
+    .M_DO(cpuif_m_do),
+    .M_BE(cpuif_m_be),
+    .M_WR(cpuif_m_wr),
+    .M_REQ(cpuif_m_req),
+    .M_ACK(cpuif_m_ack)
+    );
 
-always @(posedge CLK) if (CE) begin
-    scsi_reset_int <= '0;
-    scsi_rxbuf_rd <= '0;
+//////////////////////////////////////////////////////////////////////
+// DRAM memory controllers
 
-    if (~RESn) begin
-    end
-    else begin
-        if (~CSn & ~RDn) begin
-            case (A[2:1])
-                2'b10: begin
-                    case (rsel)
-                        7'h07: scsi_reset_int <= '1;
-                        default: ;
-                    endcase
-                end
-                2'b11: begin
-                    case (rsel)
-                        7'h05: scsi_rxbuf_rd <= '1;
-                        default: ;
-                    endcase
-                end
-                default: ;
-            endcase
-        end
-    end
-end
+`ifdef HUC6272_DMC_ENABLE
 
-always @* begin
-    dout = '0;
-    case (A[2])
-        1'b0: begin
-            dout[6:0] = rsel;
-            dout[23:16] = scsi_cur_bus_stat;
-        end
-        1'b1: begin
-            case (rsel)
-                7'h00: dout[7:0] = scsi_din;
-                7'h01: begin
-                    dout[7] = scsi_assert_rst;
-                    dout[4] = scsi_assert_ack;
-                    dout[2] = scsi_assert_sel;
-                    dout[1] = scsi_assert_atn;
-                    dout[0] = scsi_assert_data;
-                end
-                7'h02: begin
-                    dout[1] = scsi_dma_mode;
-                end
-                7'h03: begin
-                    dout[2] = scsi_assert_io;
-                    dout[1] = scsi_assert_cd;
-                    dout[0] = scsi_assert_msg;
-                end
-                7'h04: dout[7:0] = scsi_cur_bus_stat;
-                7'h05: begin
-                    dout[23:16] = scsi_rxbuf;
-                    dout[6] = scsi_dma_req;
-                    dout[4] = scsi_int_req_act;
-                    dout[3] = scsi_phase_match;
-                    dout[1] = ~SCSI_ATNn;
-                    dout[0] = ~SCSI_ACKn;
-                end
-                7'h06: dout[7:0] = scsi_rxbuf;
-                default: ;
-            endcase
-        end
-    endcase
-end
+huc6272_dmc dmca
+   (
+    .*,
 
-assign DO = (~CSn & ~RDn) ? (A[1] ? dout[31:16] : dout[15:0]) : '0;
+    .A(dmca_m_a),
+    .DI(dmca_m_di),
+    .DO(dmca_m_do),
+    .BE(dmca_m_be),
+    .WR(dmca_m_wr),
+    .REQ(dmca_m_req),
+    .ACK(dmca_m_ack),
 
-assign BUSYn = '1; // TODO
-assign IRQn = '1; // TODO
+    .R_DI(RA_DI),
+    .R_DO(RA_DO),
+    .R_A(RA_A),
+    .R_OEn(RA_OEn),
+    .R_WEn(RA_WEn),
+    .R_RASn(RA_RASn),
+    .R_LCASn(RA_LCASn),
+    .R_UCASn(RA_UCASn)
+    );
+
+huc6272_dmc dmcb
+   (
+    .*,
+
+    .A(dmcb_m_a),
+    .DI(dmcb_m_di),
+    .DO(dmcb_m_do),
+    .BE(dmcb_m_be),
+    .WR(dmcb_m_wr),
+    .REQ(dmcb_m_req),
+    .ACK(dmcb_m_ack),
+
+    .R_DI(RB_DI),
+    .R_DO(RB_DO),
+    .R_A(RB_A),
+    .R_OEn(RB_OEn),
+    .R_WEn(RB_WEn),
+    .R_RASn(RB_RASn),
+    .R_LCASn(RB_LCASn),
+    .R_UCASn(RB_UCASn)
+    );
+
+`else // ifndef HUC6272_DMC_ENABLE
+
+// DMC is external to this chip
+assign MA_A = dmca_m_a;
+assign MA_DO = dmca_m_do;
+assign MA_BE = dmca_m_be;
+assign MA_WR = dmca_m_wr;
+assign MA_REQ = dmca_m_req;
+assign dmca_m_di = MA_DI;
+assign dmca_m_ack = MA_ACK;
+
+assign MB_A = dmcb_m_a;
+assign MB_DO = dmcb_m_do;
+assign MB_BE = dmcb_m_be;
+assign MB_WR = dmcb_m_wr;
+assign MB_REQ = dmcb_m_req;
+assign dmcb_m_di = MB_DI;
+assign dmcb_m_ack = MB_ACK;
+
+`endif // HUC6272_DMC_ENABLE
+
+//////////////////////////////////////////////////////////////////////
+// Memory fabric
+
+huc6272_fabric fabric
+   (
+    .*
+    );
 
 //////////////////////////////////////////////////////////////////////
 // SCSI interface
 
-logic           scsi_reqn_d;
-logic           scsi_assert_ack_dma, scsi_assert_ack_cnt;
+huc6272_scsi scsi
+   (
+    .*
+    );
 
-// Data transfer engine (for DMA)
+//////////////////////////////////////////////////////////////////////
+// Video interface
 
-wire scsi_req_posedge = ~SCSI_REQn & scsi_reqn_d;
+huc6272_video video
+   (
+    .*,
 
-always @(posedge CLK) if (CE) begin
-    scsi_reqn_d <= SCSI_REQn;
+    .MA_A(vid_ma_a),
+    .MA_DI(vid_ma_di),
+    .MA_DO(vid_ma_do),
+    .MA_BE(vid_ma_be),
+    .MA_WR(vid_ma_wr),
+    .MA_REQ(vid_ma_req),
+    .MA_ACK(vid_ma_ack),
 
-    if (~RESn) begin
-        scsi_rxbuf <= '0;
-    end
-    else if (scsi_req_posedge) begin
-        // Latch DI into RX buffer on REQn assertion.
-        scsi_rxbuf <= scsi_din;
-    end
-end
-
-// REQn assertion or REG.7L write sets REG.5H[6].
-// RX buffer readout triggers ACKn pulse and clears REG.5H[6].
-
-assign scsi_dma_req_set = scsi_dma_mode & (scsi_req_posedge | scsi_start_dma_rx);
-assign scsi_dma_req_clr = scsi_dma_mode & scsi_rxbuf_rd;
-
-always @(posedge CLK) if (CE) begin
-    if (~RESn) begin
-        scsi_dma_req <= '0;
-    end
-    else begin
-        scsi_dma_req <= (scsi_dma_req & ~scsi_dma_req_clr) | scsi_dma_req_set;
-    end
-end
-
-// Enforce minimum ACKn pulse assertion and negation periods.
-always @(posedge CLK) if (CE) begin
-    if (~RESn | ~scsi_dma_mode) begin
-        scsi_assert_ack_dma <= '0;
-        scsi_assert_ack_cnt <= '0;
-    end
-    else begin
-        if (scsi_assert_ack_cnt)
-            scsi_assert_ack_cnt <= '0;
-        else begin
-            if (scsi_dma_req_clr) begin
-                scsi_assert_ack_dma <= '1;
-                scsi_assert_ack_cnt <= '1;
-            end
-            else if (scsi_assert_ack_dma) begin
-                scsi_assert_ack_dma <= '0;
-                scsi_assert_ack_cnt <= '1;
-            end
-        end
-    end
-end
-
-// Bus hookups
-
-assign scsi_cur_bus_stat = {~SCSI_RSTn, ~SCSI_BSYn, ~SCSI_REQn, ~SCSI_MSGn,
-                            ~SCSI_CDn, ~SCSI_IOn, ~SCSI_SELn, 1'b0};
-
-assign SCSI_DO = scsi_dout;
-assign SCSI_DOE = SCSI_IOn & scsi_assert_data;
-assign SCSI_ATNn = ~scsi_assert_atn;
-assign SCSI_ACKn = ~(scsi_assert_ack | scsi_assert_ack_dma);
-assign SCSI_RSTn = ~scsi_assert_rst;
-assign SCSI_SELn = ~scsi_assert_sel;
-
-assign scsi_din = SCSI_DI;
+    .MB_A(vid_mb_a),
+    .MB_DI(vid_mb_di),
+    .MB_DO(vid_mb_do),
+    .MB_BE(vid_mb_be),
+    .MB_WR(vid_mb_wr),
+    .MB_REQ(vid_mb_req),
+    .MB_ACK(vid_mb_ack)
+    );
 
 endmodule
+
+`include "huc6272_cpuif.sv"
+`include "huc6272_dmc.sv"
+`include "huc6272_fabric.sv"
+`include "huc6272_fabric_tee.sv"
+`include "huc6272_fabric_bank.sv"
+`include "huc6272_scsi.sv"
+`include "huc6272_video.sv"
+`include "huc6272_fetch.sv"
+`include "huc6272_bgm.sv"
