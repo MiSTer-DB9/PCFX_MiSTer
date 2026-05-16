@@ -1,0 +1,123 @@
+// Memory fabric
+//
+// Copyright (c) 2026 David Hunter
+//
+// This program is GPL licensed. See COPYING for the full license.
+
+module huc6272_fabric
+   (
+    input         CLK,
+    input         CE,
+    input         RESn,
+
+    input         cpuif_m_ba,
+    input [17:0]  cpuif_m_a,
+    output [15:0] cpuif_m_di,
+    input [15:0]  cpuif_m_do,
+    input [1:0]   cpuif_m_be,
+    input         cpuif_m_wr, 
+    input         cpuif_m_req, 
+    output        cpuif_m_ack,
+
+    input [17:0]  vid_ma_a,
+    output [15:0] vid_ma_di,
+    input [15:0]  vid_ma_do,
+    input [1:0]   vid_ma_be,
+    input         vid_ma_wr,
+    input         vid_ma_req, 
+    output        vid_ma_ack,
+
+    input [17:0]  vid_mb_a,
+    output [15:0] vid_mb_di,
+    input [15:0]  vid_mb_do,
+    input [1:0]   vid_mb_be,
+    input         vid_mb_wr,
+    input         vid_mb_req, 
+    output        vid_mb_ack,
+
+    output [17:0] dmca_m_a,
+    input [15:0]  dmca_m_di, 
+    output [15:0] dmca_m_do,
+    output [1:0]  dmca_m_be,
+    output        dmca_m_wr, 
+    output        dmca_m_req, 
+    input         dmca_m_ack,
+
+    output [17:0] dmcb_m_a,
+    input [15:0]  dmcb_m_di, 
+    output [15:0] dmcb_m_do,
+    output [1:0]  dmcb_m_be,
+    output        dmcb_m_wr, 
+    output        dmcb_m_req, 
+    input         dmcb_m_ack
+    );
+
+//////////////////////////////////////////////////////////////////////
+// Tees for clients that have a bank select bit
+
+wire [15:0]   cpuif_ma_di, cpuif_mb_di;
+wire          cpuif_ma_req, cpuif_mb_req;
+wire          cpuif_ma_ack, cpuif_mb_ack;
+
+huc6272_fabric_tee cpuif
+   (
+    .M_BA(cpuif_m_ba),
+    .M_DI(cpuif_m_di),
+    .M_REQ(cpuif_m_req), 
+    .M_ACK(cpuif_m_ack),
+
+    .MA_DI(cpuif_ma_di),
+    .MA_REQ(cpuif_ma_req), 
+    .MA_ACK(cpuif_ma_ack),
+
+    .MB_DI(cpuif_mb_di),
+    .MB_REQ(cpuif_mb_req), 
+    .MB_ACK(cpuif_mb_ack)
+    );
+
+//////////////////////////////////////////////////////////////////////
+// Per-bank multiplexers
+
+huc6272_fabric_bank #(.CN(2)) fba
+   (
+    .*,
+
+    .cm_a('{vid_ma_a, cpuif_m_a}),
+    .cm_di('{vid_ma_di, cpuif_ma_di}),
+    .cm_do('{vid_ma_do, cpuif_m_do}),
+    .cm_be('{vid_ma_be, cpuif_m_be}),
+    .cm_wr('{vid_ma_wr, cpuif_m_wr}),
+    .cm_req('{vid_ma_req, cpuif_ma_req}),
+    .cm_ack('{vid_ma_ack, cpuif_ma_ack}),
+
+    .dmc_m_a(dmca_m_a),
+    .dmc_m_di(dmca_m_di),
+    .dmc_m_do(dmca_m_do),
+    .dmc_m_be(dmca_m_be),
+    .dmc_m_wr(dmca_m_wr),
+    .dmc_m_req(dmca_m_req),
+    .dmc_m_ack(dmca_m_ack)
+    );
+
+huc6272_fabric_bank #(.CN(2)) fbb
+   (
+    .*,
+
+    .cm_a('{vid_mb_a, cpuif_m_a}),
+    .cm_di('{vid_mb_di, cpuif_mb_di}),
+    .cm_do('{vid_mb_do, cpuif_m_do}),
+    .cm_be('{vid_mb_be, cpuif_m_be}),
+    .cm_wr('{vid_mb_wr, cpuif_m_wr}),
+    .cm_req('{vid_mb_req, cpuif_mb_req}),
+    .cm_ack('{vid_mb_ack, cpuif_mb_ack}),
+
+    .dmc_m_a(dmcb_m_a),
+    .dmc_m_di(dmcb_m_di),
+    .dmc_m_do(dmcb_m_do),
+    .dmc_m_be(dmcb_m_be),
+    .dmc_m_wr(dmcb_m_wr),
+    .dmc_m_req(dmcb_m_req),
+    .dmc_m_ack(dmcb_m_ack)
+    );
+
+endmodule

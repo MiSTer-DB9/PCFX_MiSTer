@@ -1,0 +1,192 @@
+[*]
+[*] GTKWave Analyzer v3.4.0 (w)1999-2022 BSI
+[*] Mon Mar 23 05:07:41 2026
+[*]
+[dumpfile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/huc6272_video_kram_tb.vcd"
+[dumpfile_mtime] "Mon Mar 23 04:43:37 2026"
+[dumpfile_size] 11190121
+[savefile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/huc6272_video_kram_tb.gtkw"
+[timestart] 666951
+[size] 1333 600
+[pos] -1 -1
+*-9.543900 668500 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+[markername] AA
+[markername] BB
+[markername] CC
+[markername] DD
+[markername] EE
+[markername] FF
+[markername] GG
+[markername] HH
+[markername] II
+[markername] JJ
+[markername] KK
+[markername] LL
+[markername] MM
+[markername] NN
+[markername] OO
+[markername] PP
+[markername] QQ
+[markername] RR
+[markername] SS
+[markername] TT
+[markername] UU
+[markername] VV
+[markername] WW
+[markername] XX
+[markername] YY
+[markername] ZZ
+[treeopen] huc6272_video_kram_tb.
+[treeopen] huc6272_video_kram_tb.mmc.
+[treeopen] huc6272_video_kram_tb.mmc.dmca.
+[treeopen] huc6272_video_kram_tb.mmc.dmcb.
+[treeopen] huc6272_video_kram_tb.mmc.video.
+[sst_width] 255
+[signals_width] 231
+[sst_expanded] 1
+[sst_vpaned_height] 159
+@28
+huc6272_video_kram_tb.mmc.video.CLK
+huc6272_video_kram_tb.mmc.video.CE
+huc6272_video_kram_tb.mmc.video.DCK
+@24
+huc6272_video_kram_tb.mmc.video.row[9:0]
+huc6272_video_kram_tb.mmc.video.col[9:0]
+@28
+huc6272_video_kram_tb.mmc.A[2:1]
+@22
+huc6272_video_kram_tb.mmc.DI[15:0]
+huc6272_video_kram_tb.mmc.DO[15:0]
+@28
+huc6272_video_kram_tb.mmc.CSn
+huc6272_video_kram_tb.mmc.RDn
+huc6272_video_kram_tb.mmc.WRn
+@800200
+-cpuif
+@28
+huc6272_video_kram_tb.mmc.cpuif.BUSYn
+@22
+huc6272_video_kram_tb.mmc.cpuif.M_A[17:0]
+@28
+huc6272_video_kram_tb.mmc.cpuif.M_REQ
+huc6272_video_kram_tb.mmc.cpuif.M_ACK
+@22
+huc6272_video_kram_tb.mmc.cpuif.rsel[6:0]
+huc6272_video_kram_tb.mmc.cpuif.krra[31:0]
+@28
+huc6272_video_kram_tb.mmc.cpuif.krrd_act
+huc6272_video_kram_tb.mmc.cpuif.krrd_done
+@22
+huc6272_video_kram_tb.mmc.cpuif.krwa[31:0]
+@28
+huc6272_video_kram_tb.mmc.cpuif.krwr_act
+huc6272_video_kram_tb.mmc.cpuif.krwr_pend
+@22
+huc6272_video_kram_tb.mmc.cpuif.krd[15:0]
+@1000200
+-cpuif
+@800200
+-vfeb
+@22
+huc6272_video_kram_tb.mmc.video.vfeb.mpe_ra[17:0]
+huc6272_video_kram_tb.mmc.video.vfeb.mpe_d[8:0]
+@28
+huc6272_video_kram_tb.mmc.video.vfeb.mtrg
+@29
+huc6272_video_kram_tb.mmc.video.vfeb.mack
+@22
+huc6272_video_kram_tb.mmc.video.vfeb.ma[17:0]
+@28
+huc6272_video_kram_tb.mmc.video.vfeb.M_REQ
+huc6272_video_kram_tb.mmc.video.vfeb.M_ACK
+@22
+huc6272_video_kram_tb.mmc.video.vfeb.MD[15:0]
+@28
+huc6272_video_kram_tb.mmc.video.vfeb.MDL[1:0]
+@1000200
+-vfeb
+@800200
+-bg0
+@28
+huc6272_video_kram_tb.mmc.video.bg0.cgfce
+huc6272_video_kram_tb.mmc.video.bg0.cgra
+@22
+huc6272_video_kram_tb.mmc.video.bg0.cgrd[31:0]
+@28
+huc6272_video_kram_tb.mmc.video.render
+@24
+huc6272_video_kram_tb.mmc.video.render_bg_row[9:0]
+huc6272_video_kram_tb.mmc.video.render_bg_col[9:0]
+@22
+huc6272_video_kram_tb.mmc.video.bg0.cgpd[23:0]
+@28
+huc6272_video_kram_tb.mmc.video.bg0.cgrce
+@1000200
+-bg0
+@800200
+-dmca
+@22
+huc6272_video_kram_tb.mmc.dmca.A[17:0]
+@28
+huc6272_video_kram_tb.mmc.dmca.WR
+huc6272_video_kram_tb.mmc.dmca.REQ
+huc6272_video_kram_tb.mmc.dmca.ACK
+@22
+huc6272_video_kram_tb.mmc.dmca.a[17:0]
+@28
+huc6272_video_kram_tb.mmc.dmca.act
+huc6272_video_kram_tb.mmc.dmca.ras
+huc6272_video_kram_tb.mmc.dmca.cas
+huc6272_video_kram_tb.mmc.dmca.io
+@1000200
+-dmca
+@800200
+-dmcb
+@22
+huc6272_video_kram_tb.mmc.dmcb.A[17:0]
+@28
+huc6272_video_kram_tb.mmc.dmcb.WR
+huc6272_video_kram_tb.mmc.dmcb.REQ
+huc6272_video_kram_tb.mmc.dmcb.ACK
+@22
+huc6272_video_kram_tb.mmc.dmcb.a[17:0]
+@28
+huc6272_video_kram_tb.mmc.dmcb.act
+huc6272_video_kram_tb.mmc.dmcb.ras
+huc6272_video_kram_tb.mmc.dmcb.cas
+huc6272_video_kram_tb.mmc.dmcb.io
+@1000200
+-dmcb
+@800200
+-krama
+@22
+huc6272_video_kram_tb.krama.A[8:0]
+huc6272_video_kram_tb.krama.IO[15:0]
+@28
+huc6272_video_kram_tb.krama.OEn
+huc6272_video_kram_tb.krama.WEn
+huc6272_video_kram_tb.krama.RASn
+huc6272_video_kram_tb.krama.LCASn
+huc6272_video_kram_tb.krama.UCASn
+@22
+huc6272_video_kram_tb.krama.row[8:0]
+huc6272_video_kram_tb.krama.col[8:0]
+@1000200
+-krama
+@800200
+-kramb
+@22
+huc6272_video_kram_tb.kramb.A[8:0]
+huc6272_video_kram_tb.kramb.IO[15:0]
+@28
+huc6272_video_kram_tb.kramb.OEn
+huc6272_video_kram_tb.kramb.WEn
+huc6272_video_kram_tb.kramb.RASn
+huc6272_video_kram_tb.kramb.LCASn
+@22
+huc6272_video_kram_tb.kramb.row[8:0]
+huc6272_video_kram_tb.kramb.col[8:0]
+@1000200
+-kramb
+[pattern_trace] 1
+[pattern_trace] 0
