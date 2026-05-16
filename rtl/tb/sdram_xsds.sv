@@ -5,6 +5,7 @@
 // This program is GPL licensed. See COPYING for the full license.
 
 module sdram_xsds
+  #(parameter CLK_MHZ = 142.8571428)
   (
    inout [15:0] SDRAM_DQ, // 16 bit bidirectional data bus
    input [12:0] SDRAM_A, // 13 bit multiplexed address bus
@@ -19,7 +20,7 @@ module sdram_xsds
    input        SDRAM_CKE
    );
 
-as4c32m16sb u1a
+as4c32m16sb #(.CLK_MHZ(CLK_MHZ)) u1a
   (
    .DQ(SDRAM_DQ),
    .A(SDRAM_A),
@@ -34,7 +35,7 @@ as4c32m16sb u1a
    .CKE(SDRAM_CKE)
    );
 
-as4c32m16sb u2a
+as4c32m16sb #(.CLK_MHZ(CLK_MHZ)) u2a
   (
    .DQ(SDRAM_DQ),
    .A(SDRAM_A),

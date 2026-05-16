@@ -7,6 +7,7 @@
 import core_pkg::hmi_t;
 
 module pcfx_top
+    #(parameter CLK_RAM_MHZ = 100.0)
 (
 	input             clk_sys,
     input             clk_ram,
@@ -43,7 +44,6 @@ module pcfx_top
 
     input             hmi_t HMI,
 
-	output            SDRAM_CLK,
 	output            SDRAM_CKE,
 	output [12:0]     SDRAM_A,
 	output [1:0]      SDRAM_BA,
@@ -69,63 +69,59 @@ module pcfx_top
 	output [7:0]      B
 );
 
-reg [24:0]      romwr_a;
+reg [26:0]      romwr_a;
 reg [31:0]      romwr_d;
 reg             romwr_req = 0;
-logic [24:0]    bk_sdrd_a;
+wire            romwr_ack;
+logic [26:0]    bk_sdrd_a;
 logic [31:0]    bk_sdrd_din, bk_sdrd_dout;
 logic           bk_sdrd_we_req = 0, bk_sdrd_rd_req = 0;
 logic           bk_sdrd_we_ack, bk_sdrd_rd_ack;
+logic [31:0]    bk_sd_blk_cnt [2];
+logic [1:0]     bk_mounted;
 
 //////////////////////////////////////////////////////////////////////
 // SDRAM controller
 
-wire        sdram_clkref;
-wire [24:0] sdram_raddr, sdram_waddr, sdram_ls_addr;
-wire [31:0] sdram_din, sdram_dout, sdram_ls_din, sdram_ls_dout;
-wire        sdram_rd, sdram_rd_rdy;
-wire [3:0]  sdram_be;
-wire        sdram_we;
-wire        sdram_we_rdy;
-wire        sdram_ls_we_req, sdram_ls_we_ack;
-wire        sdram_ls_rd_req, sdram_ls_rd_ack;
+wire [26:0] sdram_ch1_addr;
+wire [31:0] sdram_ch1_din, sdram_ch1_dout;
+wire [3:0]  sdram_ch1_be;
+wire        sdram_ch1_rnw, sdram_ch1_req, sdram_ch1_ready;
+wire [26:0] sdram_ch2_addr;
+wire [31:0] sdram_ch2_din, sdram_ch2_dout;
+wire        sdram_ch2_rnw, sdram_ch2_req, sdram_ch2_ready;
+wire [26:0] sdram_ch3_addr;
+wire [31:0] sdram_ch3_din, sdram_ch3_dout;
+wire        sdram_ch3_rnw, sdram_ch3_req, sdram_ch3_ready;
 
-sdram sdram
+sdram #(.CLK_MHZ(CLK_RAM_MHZ)) sdram
 (
-	.*,
+    .*,
 
-	.init(~pll_locked),
-	.clk(clk_ram),
-	.clkref(sdram_clkref),
+    .init(~pll_locked),
+    .clk(clk_ram),
+    .hblank(HBlank),
 
-	.waddr(sdram_waddr),
-	.din(sdram_din),
-    .be(sdram_be),
-	.we(sdram_we),
-    .we_rdy(sdram_we_rdy),
-
-	.raddr(sdram_raddr),
-	.rd(sdram_rd),
-	.rd_rdy(sdram_rd_rdy),
-	.dout(sdram_dout),
-
-    .ls_addr(sdram_ls_addr),
-    .ls_din(sdram_ls_din),
-	.ls_we_req(sdram_ls_we_req),
-	.ls_we_ack(sdram_ls_we_ack),
-    .ls_dout(sdram_ls_dout),
-	.ls_rd_req(sdram_ls_rd_req),
-	.ls_rd_ack(sdram_ls_rd_ack)
+    .ch1_addr(sdram_ch1_addr),
+    .ch1_dout(sdram_ch1_dout),
+    .ch1_din(sdram_ch1_din),
+    .ch1_req(sdram_ch1_req),
+    .ch1_rnw(sdram_ch1_rnw),
+    .ch1_be(sdram_ch1_be),
+    .ch1_ready(sdram_ch1_ready),
+    .ch2_addr(sdram_ch2_addr),
+    .ch2_dout(sdram_ch2_dout),
+    .ch2_din(sdram_ch2_din),
+    .ch2_req(sdram_ch2_req),
+    .ch2_rnw(sdram_ch2_rnw),
+    .ch2_ready(sdram_ch2_ready),
+    .ch3_addr(sdram_ch3_addr),
+    .ch3_dout(sdram_ch3_dout),
+    .ch3_din(sdram_ch3_din),
+    .ch3_req(sdram_ch3_req),
+    .ch3_rnw(sdram_ch3_rnw),
+    .ch3_ready(sdram_ch3_ready)
 );
-
-assign sdram_ls_addr = ioctl_download ? romwr_a : bk_sdrd_a;
-assign sdram_ls_din = ioctl_download ? romwr_d : bk_sdrd_dout;
-assign sdram_ls_we_req = romwr_req ^ bk_sdrd_we_req;
-assign bk_sdrd_din = sdram_ls_dout;
-assign sdram_ls_rd_req = bk_sdrd_rd_req;
-assign romwr_ack = sdram_ls_we_ack ^ bk_sdrd_we_req;
-assign bk_sdrd_we_ack = sdram_ls_we_ack ^ romwr_req;
-assign bk_sdrd_rd_ack = sdram_ls_rd_ack;
 
 //////////////////////////////////////////////////////////////////////
 // Computer assembly
@@ -169,6 +165,15 @@ wire        mcp_rdn;
 wire        mcp_wrn;
 wire        mcp_readyn;
 
+wire [17:0] krama_a;
+wire [15:0] krama_di, krama_do;
+wire [1:0]  krama_be;
+wire        krama_wr, krama_req, krama_ack;
+wire [17:0] kramb_a;
+wire [15:0] kramb_di, kramb_do;
+wire [1:0]  kramb_be;
+wire        kramb_wr, kramb_req, kramb_ack;
+
 wire        bmp_cfg_en;
 logic [2:0] bmp_cfg_size;
 wire [22:0] bmp_a;
@@ -177,10 +182,17 @@ wire        bmp_cen;
 wire        bmp_wen;
 wire        bmp_readyn;
 
+wire [26:0] ls_addr;
+wire [31:0] ls_din, ls_dout;
+wire        ls_we_req, ls_we_ack;
+wire        ls_rd_req, ls_rd_ack;
+
 wire clk_cpu = clk_sys;
 wire reset_int = reset | ioctl_download;
 
 initial cpu_ce = 0;
+initial reset_cpu = 1;
+initial cpu_resn = 0;
 
 always @(posedge clk_cpu) begin
   cpu_ce <= ~cpu_ce;
@@ -226,6 +238,22 @@ mach mach
    .MCP_RDn(mcp_rdn),
    .MCP_WRn(mcp_wrn),
    .MCP_READYn(mcp_readyn),
+
+   .KRAMA_A(krama_a),
+   .KRAMA_DI(krama_di),
+   .KRAMA_DO(krama_do),
+   .KRAMA_BE(krama_be),
+   .KRAMA_WR(krama_wr),
+   .KRAMA_REQ(krama_req),
+   .KRAMA_ACK(krama_ack),
+
+   .KRAMB_A(kramb_a),
+   .KRAMB_DI(kramb_di),
+   .KRAMB_DO(kramb_do),
+   .KRAMB_BE(kramb_be),
+   .KRAMB_WR(kramb_wr),
+   .KRAMB_REQ(kramb_req),
+   .KRAMB_ACK(kramb_ack),
 
    .HMI(HMI),
 
@@ -276,17 +304,50 @@ memif_sdram memif_sdram
    .BMP_WEn(bmp_wen),
    .BMP_READYn(bmp_readyn),
 
+   .KRAMA_A(krama_a),
+   .KRAMA_DI(krama_di),
+   .KRAMA_DO(krama_do),
+   .KRAMA_BE(krama_be),
+   .KRAMA_WR(krama_wr),
+   .KRAMA_REQ(krama_req),
+   .KRAMA_ACK(krama_ack),
+
+   .KRAMB_A(kramb_a),
+   .KRAMB_DI(kramb_di),
+   .KRAMB_DO(kramb_do),
+   .KRAMB_BE(kramb_be),
+   .KRAMB_WR(kramb_wr),
+   .KRAMB_REQ(kramb_req),
+   .KRAMB_ACK(kramb_ack),
+
+   .LS_ADDR(ls_addr),
+   .LS_DIN(ls_din),
+   .LS_WE_REQ(ls_we_req),
+   .LS_WE_ACK(ls_we_ack),
+   .LS_DOUT(ls_dout),
+   .LS_RD_REQ(ls_rd_req),
+   .LS_RD_ACK(ls_rd_ack),
+
    .SDRAM_CLK(clk_ram),
-   .SDRAM_CLKREF(sdram_clkref),
-   .SDRAM_WADDR(sdram_waddr),
-   .SDRAM_DIN(sdram_din),
-   .SDRAM_BE(sdram_be),
-   .SDRAM_WE(sdram_we),
-   .SDRAM_WE_RDY(sdram_we_rdy),
-   .SDRAM_RADDR(sdram_raddr),
-   .SDRAM_RD(sdram_rd),
-   .SDRAM_RD_RDY(sdram_rd_rdy),
-   .SDRAM_DOUT(sdram_dout)
+   .SDRAM_CH1_ADDR(sdram_ch1_addr),
+   .SDRAM_CH1_DOUT(sdram_ch1_dout),
+   .SDRAM_CH1_DIN(sdram_ch1_din),
+   .SDRAM_CH1_REQ(sdram_ch1_req),
+   .SDRAM_CH1_RNW(sdram_ch1_rnw),
+   .SDRAM_CH1_BE(sdram_ch1_be),
+   .SDRAM_CH1_READY(sdram_ch1_ready),
+   .SDRAM_CH2_ADDR(sdram_ch2_addr),
+   .SDRAM_CH2_DOUT(sdram_ch2_dout),
+   .SDRAM_CH2_DIN(sdram_ch2_din),
+   .SDRAM_CH2_REQ(sdram_ch2_req),
+   .SDRAM_CH2_RNW(sdram_ch2_rnw),
+   .SDRAM_CH2_READY(sdram_ch2_ready),
+   .SDRAM_CH3_ADDR(sdram_ch3_addr),
+   .SDRAM_CH3_DOUT(sdram_ch3_dout),
+   .SDRAM_CH3_DIN(sdram_ch3_din),
+   .SDRAM_CH3_REQ(sdram_ch3_req),
+   .SDRAM_CH3_RNW(sdram_ch3_rnw),
+   .SDRAM_CH3_READY(sdram_ch3_ready)
    );
 
 fx_bmp bmp
@@ -310,6 +371,15 @@ fx_bmp bmp
    .RAM_READYn(bmp_readyn)
    );
 
+assign ls_addr = ioctl_download ? romwr_a : bk_sdrd_a;
+assign ls_din = ioctl_download ? romwr_d : bk_sdrd_dout;
+assign ls_we_req = romwr_req ^ bk_sdrd_we_req;
+assign ls_rd_req = bk_sdrd_rd_req;
+assign bk_sdrd_din = ls_dout;
+assign romwr_ack = ls_we_ack ^ bk_sdrd_we_req;
+assign bk_sdrd_we_ack = ls_we_ack ^ romwr_req;
+assign bk_sdrd_rd_ack = ls_rd_ack;
+
 //////////////////////////////////////////////////////////////////////
 // ROM loader
 
@@ -317,7 +387,6 @@ fx_bmp bmp
 
 reg         romwr_active = 0;
 reg         romwr_a1;
-wire        romwr_ack;
 wire        romwr_download_bmp;
 
 always @(posedge clk_sys) begin
@@ -347,7 +416,7 @@ always @(posedge clk_sys) begin
             romwr_a1 <= ~romwr_a1;
 		end else if(ioctl_wait && (romwr_req == romwr_ack)) begin
 			ioctl_wait <= 0;
-			romwr_a <= romwr_a + 25'd4;
+			romwr_a <= romwr_a + 27'd4;
 		end
 	end
 end
@@ -408,13 +477,12 @@ typedef enum bit [3:0] {
     BKST_NEXT_VD
 } bkst_t;
 
-logic [1:0]     bk_mounted;
-logic [31:0]    bk_sd_blk_cnt [2];
-
 bkst_t          bk_state = BKST_IDLE;
 logic           bk_loading = 0;
 logic           bk_saving = 0;
 logic           sd_vd; // volume select
+logic           bk_sdrd_copy_req = 0;
+logic           bk_sdrd_copy_ack = 0;
 
 logic           sd_ack_d;
 
@@ -451,7 +519,7 @@ always @(posedge clk_sys) begin
         end
         BKST_SELECT_VD: begin
             if (bk_mounted[sd_vd])
-                bk_state <= bk_loading ? BKST_START_SD_RD : BKST_START_SDRAM_RD;
+                bk_state <= bkst_t'(bk_loading ? BKST_START_SD_RD : BKST_START_SDRAM_RD);
             else
                 bk_state <= BKST_NEXT_VD;
             sd_lba <= 0;
@@ -489,7 +557,7 @@ always @(posedge clk_sys) begin
         end
         BKST_SDRAM_RD: begin
             if (bk_sdrd_copy_req == bk_sdrd_copy_ack)
-                bk_state <= bk_loading ? BKST_START_SDRAM_WR : BKST_START_SD_WR;
+                bk_state <= bkst_t'(bk_loading ? BKST_START_SDRAM_WR : BKST_START_SD_WR);
         end
         BKST_NEXT_LBA: begin
             if (sd_lba + 1'd1 == bk_sd_blk_cnt[sd_vd]) begin
@@ -498,7 +566,7 @@ always @(posedge clk_sys) begin
             end
             else begin
                 sd_lba <= sd_lba + 1'd1;
-                bk_state <= bk_loading ? BKST_START_SD_RD : BKST_START_SDRAM_RD;
+                bk_state <= bkst_t'(bk_loading ? BKST_START_SD_RD : BKST_START_SDRAM_RD);
             end
         end
         BKST_NEXT_VD: begin
@@ -518,10 +586,8 @@ end
 //////////////////////////////////////////////////////////////////////
 // SD card transfer buffer
 
-logic           bk_sdrd_copy_req = 0;
-logic           bk_sdrd_copy_ack = 0;
 logic           bk_sdrd_copying = 0;
-logic [24:0]    bk_sdrd_base_a;
+logic [26:0]    bk_sdrd_base_a;
 
 logic [7:0]     sdbuf_a;
 logic           sdbuf_a0, sdbuf_a0_d;
@@ -534,7 +600,7 @@ assign bk_sdrd_base_a = sd_vd ? BMP_BASE_A : SRAM_BASE_A;
 always @(posedge clk_sys) begin
     if (~bk_sdrd_copying & (bk_sdrd_copy_req != bk_sdrd_copy_ack)) begin
         bk_sdrd_copying <= 1;
-        bk_sdrd_a <= bk_sdrd_base_a + 25'({sd_lba, 9'b0});
+        bk_sdrd_a <= bk_sdrd_base_a + 27'({sd_lba, 9'b0});
         sdbuf_a0 <= '0;
         if (bk_loading)
             sdbuf_rden <= 1;
@@ -567,7 +633,7 @@ always @(posedge clk_sys) begin
                     else
                         bk_sdrd_rd_req <= ~bk_sdrd_rd_req;
                 end
-                bk_sdrd_a <= bk_sdrd_a + 25'd4;
+                bk_sdrd_a <= bk_sdrd_a + 27'd4;
             end
             sdbuf_a0 <= ~sdbuf_a0;
         end

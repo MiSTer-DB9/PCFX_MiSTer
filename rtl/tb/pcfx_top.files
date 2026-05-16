@@ -1,13 +1,12 @@
 sdram_xsds.sv
 as4c32m16sb.sv
-altddio_out.v
 dpram.sv
 
 ../core_pkg.sv
 
 ../pcfx_top.sv
 ../memif_sdram.sv
-../sdram.v
+../sdram.sv
 ../fx_bmp.sv
 
 ../mach.sv

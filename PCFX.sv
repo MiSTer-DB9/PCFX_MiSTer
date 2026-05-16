@@ -368,6 +368,8 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2)) hps_io
 
 ///////////////////////   CLOCKS   ///////////////////////////////
 
+localparam CLK_RAM_MHZ = 100.0;
+
 wire clk_sys, clk_ram;
 wire pll_locked;
 
@@ -377,6 +379,7 @@ pll pll
 	.rst(0),
 	.outclk_0(clk_sys),
     .outclk_1(clk_ram),
+    .outclk_2(SDRAM_CLK),
     .locked(pll_locked)
 );
 
@@ -409,7 +412,7 @@ wire VBlank;
 wire VSync;
 wire ce_pix;
 
-pcfx_top pcfx_top
+pcfx_top #(.CLK_RAM_MHZ(CLK_RAM_MHZ))  pcfx_top
 (
 	.clk_sys(clk_sys),
     .clk_ram(clk_ram),
@@ -446,7 +449,6 @@ pcfx_top pcfx_top
 
     .HMI(hmi),
 
-    .SDRAM_CLK(SDRAM_CLK),
     .SDRAM_CKE(SDRAM_CKE),
     .SDRAM_A(SDRAM_A),
     .SDRAM_BA(SDRAM_BA),

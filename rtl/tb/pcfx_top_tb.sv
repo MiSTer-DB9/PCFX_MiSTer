@@ -8,7 +8,7 @@
 
 //`define USE_IOCTL_FOR_LOAD_ROMBIOS 1
 //`define LOAD_BMP_ROM 1
-`define LOAD_SRAMS 1
+//`define LOAD_SRAMS 1
 //`define SAVE_SRAMS 1
 `define VERIFY_SRAM_LOAD 1
 `define SAVE_FRAMES 1
@@ -17,8 +17,9 @@ import core_pkg::hmi_t;
 
 module pcfx_top_tb;
 
-logic		reset;
-logic       clk_sys, clk_ram;
+logic		reset = 1;
+logic       clk_sys = 1;
+logic       clk_ram = 1;
 
 initial begin
     $timeformat(-6, 0, " us", 1);
@@ -28,7 +29,10 @@ initial begin
     $dumpvars();
 `else
     $dumpfile("pcfx_top_tb.verilator.fst");
-    #(3500e3) $dumpvars();
+    //repeat (3) #(1000e3) ;
+    //#(700e3) ;
+    #(200e3) ;
+    $dumpvars();
 `endif
 end
 
@@ -46,9 +50,25 @@ wire        SDRAM_nCAS;
 wire        SDRAM_nRAS;
 wire        SDRAM_nWE;
 
-sdram_xsds sdrb (.*);
+localparam CLK_RAM_MHZ = 100.0;
+assign SDRAM_CLK = clk_ram;
+
+sdram_xsds #(.CLK_MHZ(CLK_RAM_MHZ)) sdrb (.*);
 
 //////////////////////////////////////////////////////////////////////
+
+logic [1:0] img_mounted = 0;
+logic       img_readonly = 0;
+logic [63:0] img_size = 0;
+
+logic [31:0] sd_lba;
+logic [1:0]  sd_rd, sd_wr;
+logic [1:0]  sd_ack;
+
+logic [7:0]  sd_buff_addr = 0;
+logic [15:0] sd_buff_dout = 0;
+logic [15:0] sd_buff_din;
+logic        sd_buff_wr = 0;
 
 reg         ioctl_download = 0;
 reg [7:0]   ioctl_index;
@@ -63,7 +83,7 @@ logic       bk_load = 0;
 logic       bk_save = 0;
 logic       bmp_eject_rom = 0;
 
-hmi_t       hmi;
+hmi_t       hmi = '0;
 
 wire        pce;
 wire        hbl, vbl;
@@ -71,7 +91,7 @@ wire        vs;
 wire [7:0]  r, g, b;
 logic       reset_sys;
 
-pcfx_top pcfx_top
+pcfx_top #(.CLK_RAM_MHZ(CLK_RAM_MHZ)) pcfx_top
 (
 	.clk_sys(clk_sys),
     .clk_ram(clk_ram),
@@ -108,7 +128,6 @@ pcfx_top pcfx_top
 
     .HMI(hmi),
 
-    .SDRAM_CLK(SDRAM_CLK),
     .SDRAM_CKE(SDRAM_CKE),
     .SDRAM_A(SDRAM_A),
     .SDRAM_BA(SDRAM_BA),
@@ -134,14 +153,6 @@ pcfx_top pcfx_top
 	.B(b)
 );
 
-initial begin
-    reset = 1;
-    clk_sys = 1;
-    clk_ram = 1;
-
-    hmi = '0;
-end
-
 initial forever begin :clkgen_sys
     #0.01 clk_sys = ~clk_sys; // 50 MHz
 end
@@ -150,19 +161,20 @@ initial forever begin :clkgen_ram
     #0.005 clk_ram = ~clk_ram; // 100 MHz
 end
 
+initial reset_sys = 1;
 always @(posedge clk_sys)
     reset_sys <= reset;
 
 //////////////////////////////////////////////////////////////////////
 
-task sdram_read(input [24:0] addr, output [15:0] d);
+task sdram_read(input [26:0] addr, output [15:0] d);
     sdrb.u1a.read(pcfx_top.sdram.addr_to_bank(addr),
                   pcfx_top.sdram.addr_to_row(addr),
                   pcfx_top.sdram.addr_to_col(addr),
                   d);
 endtask
 
-task sdram_write(input [24:0] addr, input [15:0] d);
+task sdram_write(input [26:0] addr, input [15:0] d);
     sdrb.u1a.write(pcfx_top.sdram.addr_to_bank(addr),
                    pcfx_top.sdram.addr_to_row(addr),
                    pcfx_top.sdram.addr_to_col(addr),
@@ -236,11 +248,11 @@ endtask
 
 //////////////////////////////////////////////////////////////////////
 
-task load_file(input [24:0] base, input string fn);
+task load_file(input [26:0] base, input string fn);
 integer	fin;
 integer code;
 logic [15:0] data;
-logic [24:0] addr;
+logic [26:0] addr;
     begin
         fin = $fopen(fn, "rb");
         assert(fin != 0) else $error("Unable to open file %s", fn);
@@ -266,16 +278,6 @@ endtask
 
 //////////////////////////////////////////////////////////////////////
 
-logic [1:0]     img_mounted = 0;
-logic           img_readonly = 0;
-logic [63:0]    img_size = 0;
-logic [31:0]    sd_lba;
-logic [1:0]     sd_rd, sd_wr;
-logic [1:0]     sd_ack;
-logic [7:0]     sd_buff_addr = 0;
-logic [15:0]    sd_buff_dout = 0;
-logic [15:0]    sd_buff_din;
-logic           sd_buff_wr = 0;
 logic           sd_buff_rd = 0;
 
 int             sd_vd;
@@ -313,7 +315,7 @@ logic [15:0] data;
             if ($feof(sd_fin[vd]))
                 data = '0;
             else
-                $fread(data, sd_fin[vd], 0, 2);
+                code = $fread(data, sd_fin[vd], 0, 2);
             sd_buff_dout <= {data[7:0], data[15:8]}; // $fread is big-endian
             sd_buff_wr <= 1;
         end
@@ -409,19 +411,20 @@ endtask
 
 task verify_bk_load(int vd);
 bit [15:0] dfile, dram;
-bit [24:0] base, addr;
+bit [26:0] base, addr;
+integer code;
     if (sd_size[vd] == 0)
         return;
     $display("Verifying SD vol %1d", vd);
     base = (vd != 0) ? pcfx_top.memif_sdram.BMP_BASE_A : pcfx_top.memif_sdram.SRAM_BASE_A;
     addr = 0;
-    $fseek(sd_fin[vd], 0, 0);
+    code = $fseek(sd_fin[vd], 0, 0);
     for (longint i = 0; i < sd_size[vd]; i++) begin
-        $fread(dfile, sd_fin[vd], 0, 2);
+        code = $fread(dfile, sd_fin[vd], 0, 2);
         dfile = {dfile[7:0], dfile[15:8]}; // $fread is big-endian
         sdram_read(base + addr, dram);
         assert(dfile == dram) else $error("Wanted %x, got %x @ addr. %x", dfile, dram, addr);
-        addr += 25'd2;
+        addr += 27'd2;
     end
 endtask
 
@@ -455,7 +458,7 @@ always @(negedge vs) begin
   $display("%t: Frame %03d  A=%x", $time, frame, pcfx_top.mach.cpu_a);
   $sformat(fname, "frames/render-%03d", frame);
   pice = 0;
-  if (frame >= 220) begin
+  if (frame >= 0) begin
     fpic = $fopen({fname, ".hex"}, "w");
   end
   frame = frame + 1;
@@ -485,7 +488,7 @@ end
 event running;
 
 initial #0 begin
-    #10 ; // wait for sdram init.
+    #150 ; // wait for sdram init.
 
     load_rombios();
 `ifdef LOAD_BMP_ROM
@@ -512,8 +515,9 @@ end
 
 initial begin
     @(running) ;
-    repeat (4) #(1000e3) ;
-    //#(500e3) ;
+    //repeat (3) #(1000e3) ;
+    //#(719e3) ;
+    #(230e3) ;
 
 `ifdef SAVE_SRAMS
     if (bk_ena) begin
@@ -530,7 +534,7 @@ initial begin
     $finish;
 end
 
-initial if (1) begin
+initial if (0) begin
     @(running) ;
     #(216e3);
 
