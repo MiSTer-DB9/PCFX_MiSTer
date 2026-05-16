@@ -1,21 +1,40 @@
-name: Unstable Release
+name: Release
 
-# unstable channel: build upstream HEAD on each tick, ship to "unstable-builds"
-# prerelease assets (last 7 retained for rollback). Concurrency keyed
-# per-branch so multi-variant repos (GBA: master/GBA2P/accuracy) build their
-# variants in parallel without cancelling each other, while back-to-back
-# triggers of the same variant still get serialized.
+# stable channel: build fork HEAD, publish to a per-commit immutable tag
+# `stable/<MAIN_BRANCH>/<YYYYMMDD>-<sha>` with one GitHub Release on top.
+# Distribution picks the newest per variant via /releases?per_page=N filtered
+# by tag prefix. Per-branch concurrency key so multi-branch repos (GBA:
+# master/GBA2P/accuracy) build siblings in parallel.
 #
-# Three jobs: preflight (cheap HDL skip + one-time upstream merge/push + emit
-# the per-core matrix) → build (one matrix leg per core, each resolving Quartus
-# Standard from ITS OWN .qsf and building in parallel) → publish (fan-in:
-# upload every staged RBF to the shared unstable-builds release).
+# Three jobs: preflight (skip gate + pin build SHA + emit the per-core matrix)
+# → build (one matrix leg per core, each resolving Quartus Standard from ITS
+# OWN .qsf and building in parallel) → publish (fan-in: bundle every staged RBF
+# into the single release). Concurrency stays keyed on github.ref so two
+# sections sharing a branch can't land in separate workflows and cancel each
+# other (cancel-in-progress).
 concurrency:
-  group: unstable-${{ github.repository }}-${{ github.ref }}
+  group: release-${{ github.repository }}-${{ github.ref }}
   cancel-in-progress: true
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
+    inputs:
+      forced:
+        description: "Bypass source-hash skip + BOT-commit skip"
+        required: false
+        default: false
+        type: boolean
+      upstream_release_sha:
+        description: "Upstream release commit SHA (from sync_release)"
+        required: false
+        default: ''
+      upstream_head_at_sync:
+        description: "Upstream HEAD at time of sync (from sync_release)"
+        required: false
+        default: ''
 
 permissions:
   contents: write   # gh release create / upload / delete-asset
@@ -25,32 +44,29 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       skip: ${{ steps.preflight.outputs.skip }}
-      merge_skip: ${{ steps.merge.outputs.skip }}
+      source_hash: ${{ steps.preflight.outputs.source_hash }}
       skip_quartus: ${{ steps.meta.outputs.skip_quartus }}
+      build_sha: ${{ steps.meta.outputs.build_sha }}
+      date_stamp: ${{ steps.meta.outputs.date_stamp }}
+      timestamp: ${{ steps.meta.outputs.timestamp }}
       matrix: ${{ steps.meta.outputs.matrix }}
-      build_sha: ${{ steps.merge.outputs.build_sha }}
-      upstream_sha: ${{ steps.merge.outputs.upstream_sha }}
-      master_sha: ${{ steps.merge.outputs.master_sha }}
-      source_hash: ${{ steps.merge.outputs.source_hash }}
-      timestamp: ${{ steps.merge.outputs.timestamp }}
     steps:
     - uses: actions/checkout@v6
       with:
-        # main branch is only the starting point for remotes;
-        # unstable_preflight.sh fetches upstream + checks out the
-        # unstable/<branch> ref before unstable_merge.sh resumes.
         fetch-depth: 0
 
     - name: Pre-flight skip check
       id: preflight
-      run: ./.github/unstable_preflight.sh theypsilon@gmail.com neurorulez@gmail.com timothy.redaelli@gmail.com
+      run: ./.github/preflight_skip.sh
       env:
-        NOTIFICATION_API_KEY: ${{ secrets.NOTIFICATION_API_KEY }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        FORCED: ${{ github.event.inputs.forced }}
 
-    # `skip_quartus=true` for a non-Quartus section (COMPILATION_INPUT=make,
-    # e.g. Main_DB9) so build/publish stay inert no-ops there.
-    - name: Emit per-core matrix
+    # Pin the build SHA (HEAD must not drift between parallel legs) and emit
+    # the per-core build matrix from the templated lists. `skip_quartus=true`
+    # for a non-Quartus section (COMPILATION_INPUT=make, e.g. Main_DB9's
+    # separate release_v2 pipeline) so build/publish stay inert no-ops there.
+    - name: Resolve build SHA + matrix
       if: steps.preflight.outputs.skip != 'true'
       id: meta
       run: |
@@ -61,21 +77,16 @@ jobs:
           exit 0
         fi
         echo "skip_quartus=false" >> "$GITHUB_OUTPUT"
+        echo "build_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        echo "date_stamp=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+        echo "timestamp=$(date -u +%Y%m%d_%H%M)" >> "$GITHUB_OUTPUT"
         matrix=$(./.github/emit_matrix.sh 'PCFX' 'PCFX.qsf' 'output_files/PCFX.rbf')
         echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
         echo "Matrix: ${matrix}"
 
-    - name: Merge upstream HEAD (once, pre fan-out)
-      if: steps.preflight.outputs.skip != 'true' && steps.meta.outputs.skip_quartus != 'true'
-      id: merge
-      run: ./.github/unstable_merge.sh theypsilon@gmail.com neurorulez@gmail.com timothy.redaelli@gmail.com
-      env:
-        NOTIFICATION_API_KEY: ${{ secrets.NOTIFICATION_API_KEY }}
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   build:
     needs: preflight
-    if: ${{ needs.preflight.outputs.skip != 'true' && needs.preflight.outputs.merge_skip != 'true' && needs.preflight.outputs.skip_quartus != 'true' }}
+    if: ${{ needs.preflight.outputs.skip != 'true' && needs.preflight.outputs.skip_quartus != 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -86,6 +97,9 @@ jobs:
         ref: ${{ needs.preflight.outputs.build_sha }}
         fetch-depth: 1   # pinned SHA, tree only — no history walked here
 
+    # Each leg derives its Quartus Standard from THIS core's .qsf
+    # (matrix.input). `auto` = Forks.ini per-fork pin (e.g.
+    # 17.0std) or `auto` (default → parse the .qsf LAST_QUARTUS_VERSION).
     - name: Resolve Quartus Standard version
       id: mode
       env:
@@ -112,15 +126,14 @@ jobs:
         install-repo: https://github.com/drizzt/quartus-install.git
         pull-token: ${{ secrets.GHCR_PULL_TOKEN }}
 
-    - name: Build unstable RBF leg
-      run: ./.github/unstable_build.sh '${{ matrix.core }}' '${{ matrix.input }}' '${{ matrix.output }}' '${{ needs.preflight.outputs.timestamp }}' '${{ needs.preflight.outputs.upstream_sha }}' -- theypsilon@gmail.com neurorulez@gmail.com timothy.redaelli@gmail.com
+    - name: Build stable RBF leg
+      run: ./.github/release_build.sh '${{ matrix.core }}' '${{ matrix.input }}' '${{ matrix.output }}' '${{ needs.preflight.outputs.date_stamp }}' '${{ needs.preflight.outputs.build_sha }}' -- theypsilon@gmail.com neurorulez@gmail.com timothy.redaelli@gmail.com
       env:
         NOTIFICATION_API_KEY: ${{ secrets.NOTIFICATION_API_KEY }}
         QUARTUS_NATIVE_VERSION: ${{ steps.mode.outputs.version }}
         QUARTUS_NATIVE_HOME: ${{ env.QUARTUS_NATIVE_HOME }}
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        # key gate v1.5: MASTER_ROOT for SipHash MAC — materialize_secret.sh
-        # writes sys/db9_key_secret.vh from this before Quartus. KEEP SECRET.
+        # 64 hex chars = 32 bytes. KEEP SECRET.
         MASTER_ROOT_HEX: ${{ secrets.MASTER_ROOT_HEX }}
 
     - name: Upload RBF artifact
@@ -145,8 +158,9 @@ jobs:
   publish:
     needs: [preflight, build]
     # !cancelled() (not needs.build.result == 'success') so a partial set still
-    # publishes — fail-fast:false keeps siblings building.
-    if: ${{ !cancelled() && needs.preflight.outputs.skip != 'true' && needs.preflight.outputs.merge_skip != 'true' && needs.preflight.outputs.skip_quartus != 'true' }}
+    # publishes — fail-fast:false keeps siblings building; a failed core just
+    # has no artifact and is absent from the bundle.
+    if: ${{ !cancelled() && needs.preflight.outputs.skip != 'true' && needs.preflight.outputs.skip_quartus != 'true' }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v6
@@ -156,7 +170,7 @@ jobs:
 
     - name: Download built RBFs
       uses: actions/download-artifact@v4
-      # zero artifacts (all legs failed) → empty dist/ → unstable_publish.sh
+      # zero artifacts (all legs failed) → empty dist/ → release_publish.sh
       # no-ops. Also tolerates a transient download error the same way; the
       # all-fail and flaky-download cases are intentionally indistinguishable
       # for this partial-publish channel.
@@ -166,12 +180,13 @@ jobs:
         path: dist
         merge-multiple: true
 
-    - name: Publish unstable release
-      run: ./.github/unstable_publish.sh
+    - name: Publish stable release
+      run: ./.github/release_publish.sh
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        UPSTREAM_SHA: ${{ needs.preflight.outputs.upstream_sha }}
-        MASTER_SHA: ${{ needs.preflight.outputs.master_sha }}
-        BRANCH_SHA: ${{ needs.preflight.outputs.build_sha }}
+        BUILD_SHA: ${{ needs.preflight.outputs.build_sha }}
         SOURCE_HASH: ${{ needs.preflight.outputs.source_hash }}
+        DATE_STAMP: ${{ needs.preflight.outputs.date_stamp }}
         TIMESTAMP: ${{ needs.preflight.outputs.timestamp }}
+        UPSTREAM_RELEASE_SHA: ${{ github.event.inputs.upstream_release_sha }}
+        UPSTREAM_HEAD_AT_SYNC: ${{ github.event.inputs.upstream_head_at_sync }}
