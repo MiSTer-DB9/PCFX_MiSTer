@@ -73,6 +73,7 @@ module huc6272
      input         HSYNC_NEGEDGE,
      input         VSYNC_POSEDGE,
      input         VSYNC_NEGEDGE,
+     output        VDMODE, // 0=palette, 1=YUV
      output [23:0] VD, // [7:0] = palette data / [23:0] = {Y,U,V}
      output        VDE, // data enable (not in blanking)
 
@@ -88,13 +89,26 @@ module huc6272
      output        SCSI_SELn,
      input         SCSI_CDn,
      input         SCSI_REQn,
-     input         SCSI_IOn
+     input         SCSI_IOn,
+
+     // K-BUS interface
+     output [7:0]  KBUS_DO,
+     output        KBUS_RHnL,
+     input         KBUS_REQ_C71,
+     output        KBUS_ACK_C71,
+     output [1:0]  KBUS_CSn_C30
      );
 
 rf_scsi_t       rf_scsi;
 rf_bgm_t        rf_bgm;
+rf_c71xfer_t    rf_c71xfer;
+rf_c30xfer_t    rf_c30xfer;
 
 st_scsi_t       st_scsi;
+st_c71xfer_t    st_c71xfer;
+st_c30xfer_t    st_c30xfer;
+
+wire [9:0]      ROW, COL;
 
 wire            cpuif_m_ba;
 wire [17:0]     cpuif_m_a;
@@ -119,6 +133,27 @@ wire [17:0]     dmcb_m_a;
 wire [15:0]     dmcb_m_di, dmcb_m_do;
 wire [1:0]      dmcb_m_be;
 wire            dmcb_m_wr, dmcb_m_req, dmcb_m_ack;
+
+wire            scsi_m_ba;
+wire [17:0]     scsi_m_a;
+wire [15:0]     scsi_m_di, scsi_m_do;
+wire [1:0]      scsi_m_be;
+wire            scsi_m_wr, scsi_m_req, scsi_m_ack;
+
+wire            c71xfer_m_ba;
+wire [17:0]     c71xfer_m_a;
+wire [15:0]     c71xfer_m_di, c71xfer_m_do;
+wire [1:0]      c71xfer_m_be;
+wire            c71xfer_m_wr, c71xfer_m_req, c71xfer_m_ack;
+
+wire            c30xfer_m_ba;
+wire [17:0]     c30xfer_m_a;
+wire [15:0]     c30xfer_m_di, c30xfer_m_do;
+wire [1:0]      c30xfer_m_be;
+wire            c30xfer_m_wr, c30xfer_m_req, c30xfer_m_ack;
+
+wor             kbus_rhnl;
+wor [7:0]       kbus_do;
 
 //////////////////////////////////////////////////////////////////////
 // CPU memory / I/O bus interface
@@ -220,7 +255,16 @@ huc6272_fabric fabric
 
 huc6272_scsi scsi
    (
-    .*
+    .*,
+
+    .M_BA(scsi_m_ba),
+    .M_A(scsi_m_a),
+    .M_DI(scsi_m_di),
+    .M_DO(scsi_m_do),
+    .M_BE(scsi_m_be),
+    .M_WR(scsi_m_wr),
+    .M_REQ(scsi_m_req),
+    .M_ACK(scsi_m_ack)
     );
 
 //////////////////////////////////////////////////////////////////////
@@ -247,6 +291,74 @@ huc6272_video video
     .MB_ACK(vid_mb_ack)
     );
 
+//////////////////////////////////////////////////////////////////////
+// HuC6271 data transfer
+
+logic [7:0]     kbus_do_c71;
+logic           kbus_holdn_c71;
+
+huc6272_c71xfer c71xfer
+   (
+    .*,
+
+    .KBUS_DO(kbus_do_c71),
+    .KBUS_REQ(KBUS_REQ_C71),
+    .KBUS_ACK(KBUS_ACK_C71),
+    .KBUS_HOLDn(kbus_holdn_c71),
+
+    .M_BA(c71xfer_m_ba),
+    .M_A(c71xfer_m_a),
+    .M_DI(c71xfer_m_di),
+    .M_DO(c71xfer_m_do),
+    .M_BE(c71xfer_m_be),
+    .M_WR(c71xfer_m_wr),
+    .M_REQ(c71xfer_m_req),
+    .M_ACK(c71xfer_m_ack)
+    );
+
+assign kbus_do = kbus_do_c71;
+
+//////////////////////////////////////////////////////////////////////
+// HuC6230 data transfer
+
+logic [7:0]     kbus_do_c30;
+logic           kbus_rhnl_c30;
+
+huc6272_c30xfer c30xfer
+   (
+    .*,
+
+    .KBUS_DO(kbus_do_c30),
+    .KBUS_RHnL(kbus_rhnl_c30),
+    .KBUS_CSn(KBUS_CSn_C30),
+
+    .M_BA(c30xfer_m_ba),
+    .M_A(c30xfer_m_a),
+    .M_DI(c30xfer_m_di),
+    .M_DO(c30xfer_m_do),
+    .M_BE(c30xfer_m_be),
+    .M_WR(c30xfer_m_wr),
+    .M_REQ(c30xfer_m_req),
+    .M_ACK(c30xfer_m_ack)
+    );
+
+assign kbus_do = kbus_do_c30;
+assign kbus_rhnl = kbus_rhnl_c30;
+
+//////////////////////////////////////////////////////////////////////
+// K-BUS interface
+
+assign KBUS_DO = kbus_do;
+assign KBUS_RHnL = kbus_rhnl;
+
+// C30's have priority over C71
+assign kbus_holdn_c71 = &KBUS_CSn_C30;
+
+//////////////////////////////////////////////////////////////////////
+// Debug
+
+`include "huc6272_debug.svh"
+
 endmodule
 
 `include "huc6272_cpuif.sv"
@@ -256,5 +368,8 @@ endmodule
 `include "huc6272_fabric_bank.sv"
 `include "huc6272_scsi.sv"
 `include "huc6272_video.sv"
+`include "huc6272_rsag.sv"
 `include "huc6272_fetch.sv"
 `include "huc6272_bgm.sv"
+`include "huc6272_c71xfer.sv"
+`include "huc6272_c30xfer.sv"

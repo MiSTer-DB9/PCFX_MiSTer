@@ -8,10 +8,16 @@
 
 //`define USE_IOCTL_FOR_LOAD_ROMBIOS 1
 //`define LOAD_BMP_ROM 1
-//`define LOAD_SRAMS 1
+`define LOAD_SRAMS 1
 //`define SAVE_SRAMS 1
 `define VERIFY_SRAM_LOAD 1
 `define SAVE_FRAMES 1
+
+`ifdef PCFX_TOP_TB_CD
+import "DPI-C" function bit pcfx_mount_cd();
+import "DPI-C" task pcfx_read_cd(bit [7:0] buffer [], input int lba,
+                                 input int cnt);
+`endif
 
 import core_pkg::hmi_t;
 
@@ -25,14 +31,10 @@ initial begin
     $timeformat(-6, 0, " us", 1);
 
 `ifndef VERILATOR
-    $dumpfile("pcfx_top_tb.vcd");
+    //$dumpfile("pcfx_top_tb.vcd");
     $dumpvars();
 `else
     $dumpfile("pcfx_top_tb.verilator.fst");
-    //repeat (3) #(1000e3) ;
-    //#(700e3) ;
-    #(200e3) ;
-    $dumpvars();
 `endif
 end
 
@@ -50,24 +52,25 @@ wire        SDRAM_nCAS;
 wire        SDRAM_nRAS;
 wire        SDRAM_nWE;
 
-localparam CLK_RAM_MHZ = 100.0;
+localparam CLK_RAM_MHZ = 85.909090; // actual core clock rate
 assign SDRAM_CLK = clk_ram;
 
 sdram_xsds #(.CLK_MHZ(CLK_RAM_MHZ)) sdrb (.*);
 
 //////////////////////////////////////////////////////////////////////
 
-logic [1:0] img_mounted = 0;
+logic [2:0] img_mounted = 0;
 logic       img_readonly = 0;
 logic [63:0] img_size = 0;
 
-logic [31:0] sd_lba;
-logic [1:0]  sd_rd, sd_wr;
-logic [1:0]  sd_ack;
+logic [31:0] sd_lba_bk, sd_lba_cd;
+logic [5:0]  sd_blk_cnt_bk, sd_blk_cnt_cd;
+logic [2:0]  sd_rd, sd_wr;
+logic [2:0]  sd_ack;
 
-logic [7:0]  sd_buff_addr = 0;
+logic [12:0] sd_buff_addr = 0;
 logic [15:0] sd_buff_dout = 0;
-logic [15:0] sd_buff_din;
+logic [15:0] sd_buff_din_bk;
 logic        sd_buff_wr = 0;
 
 reg         ioctl_download = 0;
@@ -102,14 +105,17 @@ pcfx_top #(.CLK_RAM_MHZ(CLK_RAM_MHZ)) pcfx_top
 	.img_readonly(img_readonly),
 	.img_size(img_size),
 
-	.sd_lba(sd_lba),
+	.sd_lba_bk(sd_lba_bk),
+	.sd_lba_cd(sd_lba_cd),
+    .sd_blk_cnt_bk(sd_blk_cnt_bk),
+    .sd_blk_cnt_cd(sd_blk_cnt_cd),
 	.sd_rd(sd_rd),
 	.sd_wr(sd_wr),
 	.sd_ack(sd_ack),
 
 	.sd_buff_addr(sd_buff_addr),
 	.sd_buff_dout(sd_buff_dout),
-	.sd_buff_din(sd_buff_din),
+	.sd_buff_din_bk(sd_buff_din_bk),
 	.sd_buff_wr(sd_buff_wr),
 
 	.ioctl_download(ioctl_download),
@@ -123,6 +129,9 @@ pcfx_top #(.CLK_RAM_MHZ(CLK_RAM_MHZ)) pcfx_top
     .bk_ena(bk_ena),
     .bk_load(bk_load),
     .bk_save(bk_save),
+    .bk_autoload_en('0),
+    .bk_autosave_en('0),
+    .bk_autosave_trg('0),
     .bmp_rom_inserted(),
     .bmp_eject_rom(bmp_eject_rom),
 
@@ -150,7 +159,10 @@ pcfx_top #(.CLK_RAM_MHZ(CLK_RAM_MHZ)) pcfx_top
 
 	.R(r),
 	.G(g),
-	.B(b)
+	.B(b),
+
+    .AUD_SLOUT(),
+    .AUD_SROUT()
 );
 
 initial forever begin :clkgen_sys
@@ -278,14 +290,59 @@ endtask
 
 //////////////////////////////////////////////////////////////////////
 
+`ifdef PCFX_TOP_TB_CD
+
+localparam PCFX_SECTOR_LEN = 2352;
+localparam PCFX_BUFFER_SIZE = PCFX_SECTOR_LEN;
+
+bit [7:0]       cd_rbuf [PCFX_BUFFER_SIZE];
+event           mount_cd;
+
+task load_cd;
+bit mounted;
+    mounted = pcfx_mount_cd();
+    if (mounted) begin
+        -> mount_cd;
+        repeat (3) @(posedge clk_sys) ; // wait for mount completion
+        $display("CD loaded.");
+    end
+endtask
+
+always @mount_cd begin
+    img_size <= 64'd407024064;
+    @(posedge clk_sys) ;
+    img_mounted[2] <= '1;
+    @(posedge clk_sys) ;
+    img_mounted <= '0;
+end
+
+task read_cd(input int lba);
+    pcfx_read_cd(cd_rbuf, lba, 1);
+endtask
+
+task get_cd_rbuf(input int off, output [15:0] data, output last);
+    data = '0;
+    last = off == PCFX_BUFFER_SIZE/2-1;
+    if (off*2 < PCFX_BUFFER_SIZE) begin
+        data[0+:8] = cd_rbuf[off*2+0];
+        data[8+:8] = cd_rbuf[off*2+1];
+    end
+endtask
+
+`endif
+
+//////////////////////////////////////////////////////////////////////
+
+localparam BKN = 2;
+
 logic           sd_buff_rd = 0;
 
 int             sd_vd;
-int             sd_fin [2] = '{0, 0};
-int             sd_fout [2] = '{0, 0};
-longint         sd_size [2];
-logic [1:0]     sd_rd_act = 0; // one-hot
-logic [1:0]     sd_wr_act = 0; // one-hot
+int             sd_fin [BKN] = '{0, 0};
+int             sd_fout [BKN] = '{0, 0};
+longint         sd_size [BKN];
+logic [2:0]     sd_rd_act = 0; // one-hot
+logic [2:0]     sd_wr_act = 0; // one-hot
 event           mount_sd, start_load_bk, start_save_bk;
 
 assign sd_ack = sd_rd_act | sd_wr_act;
@@ -299,44 +356,80 @@ logic [15:0] data;
         vd = $clog2(sd_rd);
         sd_rd_act[vd] <= 1;
         sd_buff_addr <= 0;
-        code = $fseek(sd_fin[vd], sd_lba * 512, 0);
-        assert(code == 0) else $error("Unable to seek");
+        if (vd < BKN) begin
+            assert(sd_blk_cnt_bk == '0);
+            code = $fseek(sd_fin[vd], sd_lba_bk * 512, 0);
+            assert(code == 0) else $error("Unable to seek");
+        end
+        else begin
+`ifdef PCFX_TOP_TB_CD
+            assert(sd_blk_cnt_cd == 6'(1-1));
+            read_cd(sd_lba_cd);
+`endif
+        end
     end
     else if (~|sd_wr_act & |sd_wr) begin
         vd = $clog2(sd_wr);
         sd_wr_act[vd] <= 1;
         sd_buff_addr <= 0;
-        code = $fseek(sd_fout[vd], sd_lba * 512, 0);
-        assert(code == 0) else $error("Unable to seek");
+        if (vd < BKN) begin
+            assert(sd_blk_cnt_bk == '0);
+            code = $fseek(sd_fout[vd], sd_lba_bk * 512, 0);
+            assert(code == 0) else $error("Unable to seek");
+        end
     end
     else if (|sd_rd_act) begin
         vd = $clog2(sd_rd_act);
-        if (~sd_buff_wr) begin
-            if ($feof(sd_fin[vd]))
-                data = '0;
-            else
-                code = $fread(data, sd_fin[vd], 0, 2);
-            sd_buff_dout <= {data[7:0], data[15:8]}; // $fread is big-endian
-            sd_buff_wr <= 1;
+        if (vd < BKN) begin
+            if (~sd_buff_wr) begin
+                if ($feof(sd_fin[vd]))
+                    data = '0;
+                else
+                    code = $fread(data, sd_fin[vd], 0, 2);
+                sd_buff_dout <= {data[7:0], data[15:8]}; // $fread is big-endian
+                sd_buff_wr <= 1;
+            end
+            else begin
+                sd_buff_wr <= 0;
+                if (&sd_buff_addr[7:0]) begin
+                    sd_rd_act[vd] <= 0;
+                end
+                sd_buff_addr <= sd_buff_addr + 1'd1;
+            end
         end
         else begin
-            sd_buff_wr <= 0;
-            if (&sd_buff_addr) begin
-                sd_rd_act[vd] <= 0;
+        static bit last;
+`ifdef PCFX_TOP_TB_CD
+            if (~sd_buff_wr) begin
+                get_cd_rbuf(int'(sd_buff_addr), data, last);
+                sd_buff_dout <= data;
+                sd_buff_wr <= 1;
             end
-            sd_buff_addr <= sd_buff_addr + 1'd1;
+            else begin
+                sd_buff_wr <= 0;
+                if (last)
+                    sd_rd_act[vd] <= 0;
+                sd_buff_addr <= sd_buff_addr + 1'd1;
+            end
+`endif
         end
     end
     else if (|sd_wr_act) begin
         vd = $clog2(sd_wr_act);
-        if (sd_buff_rd) begin
-            $fwrite(sd_fout[vd], "%c%c", sd_buff_din[7:0], sd_buff_din[15:8]);
-            if (&sd_buff_addr) begin
-                sd_wr_act[vd] <= 0;
+        if (vd < BKN) begin
+            if (sd_buff_rd) begin
+                $fwrite(sd_fout[vd], "%c%c", sd_buff_din_bk[7:0], sd_buff_din_bk[15:8]);
+                if (&sd_buff_addr[7:0]) begin
+                    sd_wr_act[vd] <= 0;
+                end
+                sd_buff_addr <= sd_buff_addr + 1'd1;
             end
-            sd_buff_addr <= sd_buff_addr + 1'd1;
+            sd_buff_rd <= ~sd_buff_rd;
         end
-        sd_buff_rd <= ~sd_buff_rd;
+        else begin
+            // No writes to CD
+            sd_wr_act[vd] <= 0;
+        end
     end
 end
 
@@ -481,6 +574,12 @@ always @(posedge clk_sys) begin
   end
 end
 
+`else
+integer frame = 0;
+always @(negedge vs) begin
+  $display("%t: Frame %03d  A=%x", $time, frame, pcfx_top.mach.cpu_a);
+  frame = frame + 1;
+end
 `endif
 
 //////////////////////////////////////////////////////////////////////
@@ -498,8 +597,34 @@ initial #0 begin
 
     //load_file(pcfx_top.memif_sdram.RAM_BASE_A, "ram.bin", '0);
 
+`ifdef PCFX_TOP_TB_CD
+    load_cd();
+`endif
+
     reset = 0;
     $display("Reset released.");
+
+    // Skip loading CD, resume at entry point
+    $readmemh("sdram_cd.hex", sdrb.u1a.mem);
+    force pcfx_top.mach.cpu.inex.ha = 32'h00008000;
+    while (pcfx_top.mach.cpu_a != 32'h00008000)
+        @(posedge clk_sys) ;
+    $display("Booted.");
+    release pcfx_top.mach.cpu.inex.ha;
+
+/* -----\/----- EXCLUDED -----\/-----
+    // RTZ: Skip the startup splash screens: replace "JAL 000141CE" with NOPs
+    sdram_write(pcfx_top.memif_sdram.RAM_BASE_A + 27'h00013ce2, 0);
+    sdram_write(pcfx_top.memif_sdram.RAM_BASE_A + 27'h00013ce4, 0);
+
+    // RTZ: Skip to the intro movie
+    // 142B0: MOVEA #32, R0, R28
+    sdram_write(pcfx_top.memif_sdram.RAM_BASE_A + 27'h000142b0, 'hA380);
+    sdram_write(pcfx_top.memif_sdram.RAM_BASE_A + 27'h000142b2, 'h0032);
+    // 142B4: JR 141FA
+    sdram_write(pcfx_top.memif_sdram.RAM_BASE_A + 27'h000142b4, 'hABFF);
+    sdram_write(pcfx_top.memif_sdram.RAM_BASE_A + 27'h000142b6, 'hFF46);
+ -----/\----- EXCLUDED -----/\----- */
 
 `ifdef LOAD_SRAMS
     mount_sram();
@@ -515,9 +640,12 @@ end
 
 initial begin
     @(running) ;
+    
     //repeat (3) #(1000e3) ;
-    //#(719e3) ;
-    #(230e3) ;
+    //#(762e3) ;
+    #(689e3) ;
+    $dumpvars();
+    #(15e3) ;
 
 `ifdef SAVE_SRAMS
     if (bk_ena) begin
@@ -526,28 +654,33 @@ initial begin
     end
 `endif
 
-    //$writememh("sdram.hex", sdrb.u1a.mem);
+    $writememh("sdram.hex", sdrb.u1a.mem);
     //$writememh("vram0.hex", pcfx_top.mach.vram0.mem);
     //$writememh("vram1.hex", pcfx_top.mach.vram1.mem);
-    //$writememh("vce_cp.hex", pcfx_top.mach.vce.cpram.mem);
+    $writememh("vce_cp.hex", pcfx_top.mach.vce.cpram.mem);
+    pcfx_top.mach.vce.dump_regs();
+    pcfx_top.mach.mmc.dump_regs();
 
     $finish;
 end
 
-initial if (0) begin
+initial if (1) begin
     @(running) ;
-    #(216e3);
+    // RTZ: Skip the startup splashes and video
+    repeat (1) #(1000e3) ;
+    #(500e3) ;
 
-    repeat (4) begin
-        $display("Pressing JP1.Select...");
-        hmi.jp1.select = '1;
-        #(20e3) hmi.jp1.select = '0;
-        #(20e3) ;
-    end
+    $display("Pressing JP1.B1....");
+    hmi.jp1.b[1] = '1;
+    #(20e3) hmi.jp1.b[1] = '0;
+    #(20e3);
 
-    $display("Pressing JP1.Run...");
-    hmi.jp1.run = '1;
-    #(20e3) hmi.jp1.run = '0;
+    // RTZ: Skip the bonus credits
+    repeat (3) #(1000e3) ;
+
+    $display("Pressing JP1.B1....");
+    hmi.jp1.b[1] = '1;
+    #(20e3) hmi.jp1.b[1] = '0;
     #(20e3);
 end
 

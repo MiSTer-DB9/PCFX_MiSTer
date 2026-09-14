@@ -1,15 +1,15 @@
 [*]
 [*] GTKWave Analyzer v4.0.0-prealpha (8ba24ab+) (w)1999-2022 BSI
-[*] Sun Apr 26 06:12:22 2026
+[*] Thu Jul 23 02:54:09 2026
 [*]
 [dumpfile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/pcfx_top_tb.verilator.fst"
-[dumpfile_mtime] "Sun Apr 26 06:09:47 2026"
-[dumpfile_size] 8279202
+[dumpfile_mtime] "Wed Jul 22 05:50:57 2026"
+[dumpfile_size] 33289124
 [savefile] "/Users/dhunter/src/mister/PCFX_MiSTer/rtl/tb/pcfx_top_tb.verilator.gtkw"
-[timestart] 215000000
+[timestart] 5577034000
 [size] 1334 601
 [pos] -1 -1
-*-11.858119 248168920 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+*-18.176029 5577380760 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
 [markername] AA
 [markername] BB
 [markername] CC
@@ -39,12 +39,19 @@
 [treeopen] pcfx_top_tb.
 [treeopen] pcfx_top_tb.pcfx_top.
 [treeopen] pcfx_top_tb.pcfx_top.mach.
-[treeopen] pcfx_top_tb.pcfx_top.mach.mmc.video.
-[treeopen] pcfx_top_tb.pcfx_top.sdram.
+[treeopen] pcfx_top_tb.pcfx_top.mach.fake_cd.
+[treeopen] pcfx_top_tb.pcfx_top.mach.mmc.
+[treeopen] pcfx_top_tb.pcfx_top.mach.mmc.scsi.
+[treeopen] pcfx_top_tb.pcfx_top.mach.mmc.video.vfeb.
+[treeopen] pcfx_top_tb.pcfx_top.mach.scsi_cd.
+[treeopen] pcfx_top_tb.pcfx_top.mach.vpu.idct_run__Vstatic__unnamedblk4.
+[treeopen] pcfx_top_tb.pcfx_top.mach.vpu.idct_run__Vstatic__unnamedblk8.
+[treeopen] pcfx_top_tb.pcfx_top.memif_sdram.
+[treeopen] pcfx_top_tb.unnamedblk2.
 [sst_width] 255
-[signals_width] 280
+[signals_width] 290
 [sst_expanded] 1
-[sst_vpaned_height] 159
+[sst_vpaned_height] 145
 @800200
 -pcfx_top
 @28
@@ -53,7 +60,6 @@ pcfx_top_tb.ioctl_download
 pcfx_top_tb.ioctl_index[7:0]
 pcfx_top_tb.ioctl_addr[24:0]
 @28
-pcfx_top_tb.pcfx_top.img_mounted[1:0]
 pcfx_top_tb.pcfx_top.bk_mounted[1:0]
 pcfx_top_tb.bk_ena_img_mount[1:0]
 pcfx_top_tb.bk_load
@@ -61,13 +67,14 @@ pcfx_top_tb.pcfx_top.bk_load
 pcfx_top_tb.pcfx_top.bk_save
 pcfx_top_tb.pcfx_top.sd_vd
 @22
-pcfx_top_tb.pcfx_top.sd_lba[31:0]
+pcfx_top_tb.pcfx_top.sd_lba_bk[31:0]
+pcfx_top_tb.pcfx_top.sd_lba_cd[31:0]
 @28
-pcfx_top_tb.pcfx_top.sd_rd[1:0]
-pcfx_top_tb.pcfx_top.sd_wr[1:0]
-pcfx_top_tb.pcfx_top.sd_ack[1:0]
+pcfx_top_tb.pcfx_top.sd_rd[2:0]
+pcfx_top_tb.pcfx_top.sd_wr[2:0]
+pcfx_top_tb.pcfx_top.sd_ack[2:0]
 @22
-pcfx_top_tb.pcfx_top.sd_buff_addr[7:0]
+pcfx_top_tb.pcfx_top.sd_buff_addr[12:0]
 pcfx_top_tb.pcfx_top.sd_buff_dout[15:0]
 @28
 pcfx_top_tb.pcfx_top.bk_loading
@@ -83,7 +90,6 @@ pcfx_top_tb.pcfx_top.bk_sdrd_din[31:0]
 pcfx_top_tb.pcfx_top.bk_sdrd_dout[31:0]
 pcfx_top_tb.pcfx_top.sdbuf_a[7:0]
 pcfx_top_tb.pcfx_top.sdbuf_din[15:0]
-@23
 pcfx_top_tb.pcfx_top.sdbuf_dout[15:0]
 @28
 pcfx_top_tb.pcfx_top.sdbuf_rden
@@ -94,7 +100,7 @@ pcfx_top_tb.pcfx_top.bmp_ioctl_blk_cnt[31:0]
 pcfx_top_tb.pcfx_top.bmp_sd_blk_cnt[31:0]
 @1000200
 -pcfx_top
-@800200
+@c00200
 -sdram
 @28
 pcfx_top_tb.pcfx_top.sdram.ch1_req
@@ -105,7 +111,7 @@ pcfx_top_tb.pcfx_top.sdram.ch3_req
 pcfx_top_tb.pcfx_top.sdram.ch3_ready
 @22
 pcfx_top_tb.pcfx_top.sdram.refresh_wait[3:0]
-@1000200
+@1401200
 -sdram
 @c00200
 -u1a
@@ -124,7 +130,7 @@ pcfx_top_tb.sdrb.u1a.DQML
 pcfx_top_tb.sdrb.u1a.cmd[3:0]
 @1401200
 -u1a
-@800200
+@c00200
 -memif_sdram
 @28
 pcfx_top_tb.pcfx_top.memif_sdram.SRAM_CEn
@@ -136,6 +142,7 @@ pcfx_top_tb.pcfx_top.memif_sdram.mem_pend_req
 pcfx_top_tb.pcfx_top.memif_sdram.mem_rdy
 @22
 pcfx_top_tb.pcfx_top.memif_sdram.KRAMA_DI[15:0]
+pcfx_top_tb.pcfx_top.memif_sdram.KRAMA_DO[15:0]
 @28
 pcfx_top_tb.pcfx_top.memif_sdram.KRAMA_WR
 pcfx_top_tb.pcfx_top.memif_sdram.KRAMA_REQ
@@ -152,7 +159,7 @@ pcfx_top_tb.pcfx_top.memif_sdram.KRAMB_DI[15:0]
 pcfx_top_tb.pcfx_top.memif_sdram.KRAMB_WR
 pcfx_top_tb.pcfx_top.memif_sdram.KRAMB_REQ
 pcfx_top_tb.pcfx_top.memif_sdram.KRAMB_ACK
-@1000200
+@1401200
 -memif_sdram
 @c00200
 -fx_bmp
@@ -220,6 +227,27 @@ pcfx_top_tb.pcfx_top.mach.cpu.eu.rf.rmem[14][31:0]
 pcfx_top_tb.pcfx_top.mach.cpu.eu.rf.rmem[28][31:0]
 @1401200
 -cpu
+@800200
+-fake_cd
+@22
+pcfx_top_tb.pcfx_top.mach.fake_cd.CD_DATA[7:0]
+@28
+pcfx_top_tb.pcfx_top.mach.fake_cd.CD_WR
+pcfx_top_tb.pcfx_top.mach.fake_cd.DOUT_REQ
+pcfx_top_tb.pcfx_top.mach.fake_cd.DOUT_SEND
+@22
+pcfx_top_tb.pcfx_top.mach.fake_cd.SD_LBA[31:0]
+pcfx_top_tb.pcfx_top.mach.fake_cd.SDBUF_ADDR[12:0]
+pcfx_top_tb.pcfx_top.mach.fake_cd.SDBUF_DOUT[15:0]
+@100000028
+pcfx_top_tb.pcfx_top.mach.fake_cd.tst[2:0]
+@22
+pcfx_top_tb.pcfx_top.mach.fake_cd.blkcnt[15:0]
+@28
+pcfx_top_tb.pcfx_top.mach.fake_cd.cmd_start
+pcfx_top_tb.pcfx_top.mach.fake_cd.cmd_done
+@1000200
+-fake_cd
 @c00200
 -ga
 @28
@@ -265,17 +293,62 @@ pcfx_top_tb.pcfx_top.mach.mmc.CSn
 pcfx_top_tb.pcfx_top.mach.mmc.A[2:1]
 @22
 pcfx_top_tb.pcfx_top.mach.mmc.DI[15:0]
+pcfx_top_tb.pcfx_top.mach.mmc.DO[15:0]
 @28
+pcfx_top_tb.pcfx_top.mach.mmc.RDn
 pcfx_top_tb.pcfx_top.mach.mmc.WRn
 pcfx_top_tb.pcfx_top.mach.mmc.BUSYn
+pcfx_top_tb.pcfx_top.mach.mmc.IRQn
 @22
 pcfx_top_tb.pcfx_top.mach.mmc.cpuif.rsel[6:0]
-pcfx_top_tb.pcfx_top.mach.mmc.VD[23:0]
+@c00200
+-vfea
+@28
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfea.mtrg
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfea.mtrg2
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfea.mreq0
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfea.mreq
+@22
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfea.M_A[17:0]
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfea.M_DI[15:0]
+@28
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfea.M_REQ
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfea.M_ACK
+@1401200
+-vfea
+@c00200
+-vfeb
 @28
 pcfx_top_tb.pcfx_top.mach.mmc.video.vfeb.mtrg
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfeb.mtrg2
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfeb.mreq0
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfeb.mreq
+@22
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfeb.M_A[17:0]
+@28
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfeb.M_REQ
+pcfx_top_tb.pcfx_top.mach.mmc.video.vfeb.M_ACK
+@1401200
+-vfeb
+@22
+pcfx_top_tb.pcfx_top.mach.mmc.video.bg0.md[15:0]
+@28
+pcfx_top_tb.pcfx_top.mach.mmc.video.bg0.mdl[1:0]
+@22
+pcfx_top_tb.pcfx_top.mach.mmc.video.bg0.cgrd[31:0]
+pcfx_top_tb.pcfx_top.mach.mmc.video.bg0.rf_bgm[255:0]
+pcfx_top_tb.pcfx_top.mach.mmc.VD[23:0]
+@28
+pcfx_top_tb.pcfx_top.mach.mmc.fabric.c71xfer_m_req
+pcfx_top_tb.pcfx_top.mach.mmc.fabric.c30xfer_m_req
+@29
+pcfx_top_tb.pcfx_top.mach.mmc.fabric.cpuif_m_req
+@28
+pcfx_top_tb.pcfx_top.mach.mmc.fabric.vid_ma_req
+pcfx_top_tb.pcfx_top.mach.mmc.fabric.vid_mb_req
 @1000200
 -mmc
-@c00200
+@800200
 -scsi
 @22
 pcfx_top_tb.pcfx_top.mach.mmc.SCSI_DI[7:0]
@@ -294,7 +367,27 @@ pcfx_top_tb.pcfx_top.mach.mmc.SCSI_IOn
 @200
 -
 @28
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.phase_match
 pcfx_top_tb.pcfx_top.mach.mmc.scsi.assert_ack_dma
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.dma_req
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.dma_req_set
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.dma_req_clr
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.dma_a0
+@22
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.dma_rxbuf[7:0]
+@28
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.dma_rxbuf_rd
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.dma_next_word
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.dma_end
+@22
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.dma_byte_cnt[17:1]
+@28
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.m_req
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.M_ACK
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.M_BA
+@22
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.M_A[17:0]
+pcfx_top_tb.pcfx_top.mach.mmc.scsi.m_do[15:0]
 @200
 -scsi_cd
 @28
@@ -309,6 +402,7 @@ pcfx_top_tb.pcfx_top.mach.scsi_cd.COMMAND[95:0]
 @28
 pcfx_top_tb.pcfx_top.mach.scsi_cd.COMM_OUT
 @22
+pcfx_top_tb.pcfx_top.mach.scsi_cd.DATA_POS[3:0]
 pcfx_top_tb.pcfx_top.mach.scsi_cd.STATUS[7:0]
 @28
 pcfx_top_tb.pcfx_top.mach.scsi_cd.STAT_GET
@@ -317,11 +411,12 @@ pcfx_top_tb.pcfx_top.mach.scsi_cd.STAT_PEND
 pcfx_top_tb.pcfx_top.mach.scsi_cd.STAT_COUNT[15:0]
 @28
 pcfx_top_tb.pcfx_top.mach.scsi_cd.CD_WR
+pcfx_top_tb.pcfx_top.mach.scsi_cd.CD_READY
 @22
 pcfx_top_tb.pcfx_top.mach.scsi_cd.CD_DATA[7:0]
 @28
 pcfx_top_tb.pcfx_top.mach.scsi_cd.CD_DATA_END
-@1401200
+@1000200
 -scsi
 @c00200
 -vdc0
@@ -355,7 +450,7 @@ pcfx_top_tb.pcfx_top.mach.vdc1.CPURD_PEND2
 pcfx_top_tb.pcfx_top.mach.vdc1.CPURD_EXEC
 @1401200
 -vdc1
-@800200
+@c00200
 -vce
 @28
 pcfx_top_tb.pcfx_top.mach.vce.CSn
@@ -370,16 +465,80 @@ pcfx_top_tb.pcfx_top.mach.vce.h_cnt[11:0]
 pcfx_top_tb.pcfx_top.mach.vce.v_cnt[8:0]
 @22
 pcfx_top_tb.pcfx_top.mach.vce.vdc_vd[8:0]
+pcfx_top_tb.pcfx_top.mach.vce.vpu_vd[23:0]
 pcfx_top_tb.pcfx_top.mach.vce.MMC_VD[23:0]
+@c00200
+-ccdp
+@22
 pcfx_top_tb.pcfx_top.mach.vce.prio_out[1:0]
+@28
+pcfx_top_tb.pcfx_top.mach.vce.prio_sel[1:0]
+@22
+pcfx_top_tb.pcfx_top.mach.vce.mix[30:0]
+@24
+pcfx_top_tb.pcfx_top.mach.vce.ccdp_phase[1:0]
+@22
+pcfx_top_tb.pcfx_top.mach.vce.ccdp_m[11:0]
+@28
+pcfx_top_tb.pcfx_top.mach.vce.ccdp_front
+@22
+pcfx_top_tb.pcfx_top.mach.vce.ccdp_n[11:0]
+@28
+pcfx_top_tb.pcfx_top.mach.vce.ccdp_sel1_ccr
+@22
+pcfx_top_tb.pcfx_top.mach.vce.ccdp_sel1[23:0]
+@28
+pcfx_top_tb.pcfx_top.mach.vce.ccdp_sel2_cc
+@22
+pcfx_top_tb.pcfx_top.mach.vce.ccdp_sel2[23:0]
+@28
+pcfx_top_tb.pcfx_top.mach.vce.ccdp_reg1_en
+@22
+pcfx_top_tb.pcfx_top.mach.vce.ccdp_reg1[23:0]
 pcfx_top_tb.pcfx_top.mach.vce.cpa_out[8:0]
+@1401200
+-ccdp
+@28
+pcfx_top_tb.pcfx_top.mach.vce.DCK70
+@22
 pcfx_top_tb.pcfx_top.mach.vce.Y[7:0]
 pcfx_top_tb.pcfx_top.mach.vce.U[7:0]
 pcfx_top_tb.pcfx_top.mach.vce.V[7:0]
 @28
 pcfx_top_tb.pcfx_top.mach.vce.VSn
 pcfx_top_tb.pcfx_top.mach.vce.HSn
-@1000200
+@1401200
 -vce
+@c00200
+-vpu
+@22
+pcfx_top_tb.pcfx_top.mach.vpu.v_cnt[3:0]
+@28
+pcfx_top_tb.pcfx_top.mach.vpu.rbsel
+pcfx_top_tb.pcfx_top.mach.vpu.dec_act
+pcfx_top_tb.pcfx_top.mach.vpu.dec_valid[1:0]
+@22
+pcfx_top_tb.pcfx_top.mach.vpu.KBUS_DI[7:0]
+@28
+pcfx_top_tb.pcfx_top.mach.vpu.KBUS_REQ
+pcfx_top_tb.pcfx_top.mach.vpu.KBUS_ACK
+@100000028
+pcfx_top_tb.pcfx_top.mach.vpu.sist[2:0]
+@28
+pcfx_top_tb.pcfx_top.mach.vpu.si_end
+@100000028
+pcfx_top_tb.pcfx_top.mach.vpu.dcts[3:0]
+pcfx_top_tb.pcfx_top.mach.vpu.dctps[2:0]
+pcfx_top_tb.pcfx_top.mach.vpu.dctds[2:0]
+@28
+pcfx_top_tb.pcfx_top.mach.vpu.idct_done
+@24
+pcfx_top_tb.pcfx_top.mach.vpu.dct_idy[2:0]
+pcfx_top_tb.pcfx_top.mach.vpu.dct_idx[2:0]
+@22
+pcfx_top_tb.pcfx_top.mach.vpu.dec_raddr[12:0]
+pcfx_top_tb.pcfx_top.mach.vpu.dec_rdata[7:0]
+@1401200
+-vpu
 [pattern_trace] 1
 [pattern_trace] 0

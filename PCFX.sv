@@ -264,9 +264,7 @@ assign HDMI_FREEZE = 0;
 assign HDMI_BLACKOUT = 0;
 assign HDMI_BOB_DEINT = 0;
 
-assign AUDIO_S = 0;
-assign AUDIO_L = 0;
-assign AUDIO_R = 0;
+assign AUDIO_S = '0;
 assign AUDIO_MIX = 0;
 
 assign LED_DISK = 0;
@@ -284,22 +282,35 @@ assign VIDEO_ARY = (!ar) ? 12'd3 : 12'd0;
 // 0         1         2         3          4         5         6
 // 01234567890123456789012345678901 23456789012345678901234567890123
 // 0123456789ABCDEFGHIJKLMNOPQRSTUV 0123456789ABCDEFGHIJKLMNOPQRSTUV
-// X      XXX           XX
+// X      XXXXX         XX
 
 `include "build_id.v" 
 localparam CONF_STR = {
 	"PCFX;;",
 	"-;",
-	"O[22:21],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
+    "S2,CUECHD,Load CD;",
 	"-;",
-    "D0S0,SAVBIN,Mount int. backup RAM;",
-    "D1S1,FXBBIN,Mount FX-BMP backup RAM;",
-    "D2R7,Load backup RAM;",
-    "D2R8,Save backup RAM;",
-	"-;",
-    "F1,ROMBIN,Load custom BIOS;",
-    "F2,FXB,Load FX-BMP ROM;",
-    "D3T9,Unload FX-BMP ROM;",
+
+    "P1,Video & Audio;",
+    "P1-;",
+	"P1O[22:21],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
+
+    "P2,Backup RAM & ROM;",
+    "P2-;",
+	"P2O[10],Save backup RAM,On Open OSD,Manual;",
+    "D0P2S0,SAVBIN,Mount int. backup RAM;",
+    "D1P2S1,FXBBIN,Mount FX-BMP backup RAM;",
+	"P2O[11],Automount int. backup RAM,Yes,No;",
+    "D2P2R7,Load backup RAM;",
+    "D2P2R8,Save backup RAM;",
+    "P2-;",
+    "P2F2,FXB,Load FX-BMP ROM;",
+    "D2P2T9,Unload FX-BMP ROM;",
+
+    "P3,Debug;",
+    "P3-;",
+    "P3F1,ROMBIN,Load custom BIOS;",
+
 	"-;",
 	// [MiSTer-DB9-Pro BEGIN] - Saturn-first joy_type
 	"O[127:126],UserIO Joystick,Off,Saturn,DB9MD,DB15;",
@@ -325,16 +336,17 @@ wire [31:0] joystick_0 = joydb_1ena ? (OSD_STATUS ? 32'b0 : joydb_1_mapped[11:0]
 wire [31:0] joystick_1 = joydb_2ena ? (OSD_STATUS ? 32'b0 : joydb_2_mapped[11:0]) : joydb_1ena ? joystick_0_USB : joystick_1_USB;
 // [MiSTer-DB9 END]
 wire  [10:0] ps2_key;
-wire   [1:0] img_mounted;
+wire   [2:0] img_mounted;
 wire        img_readonly;
 wire [63:0] img_size;
-wire [31:0] sd_lba;
-wire  [1:0] sd_rd;
-wire  [1:0] sd_wr;
-wire  [1:0] sd_ack;
-wire  [7:0] sd_buff_addr;
+wire [31:0] sd_lba_bk, sd_lba_cd;
+wire  [5:0] sd_blk_cnt_bk, sd_blk_cnt_cd;
+wire  [2:0] sd_rd;
+wire  [2:0] sd_wr;
+wire  [2:0] sd_ack;
+wire [12:0] sd_buff_addr;
 wire [15:0] sd_buff_dout;
-wire [15:0] sd_buff_din;
+wire [15:0] sd_buff_din_bk;
 wire        sd_buff_wr;
 wire        ioctl_download;
 wire  [7:0] ioctl_index;
@@ -346,7 +358,7 @@ wire        bk_ena;
 wire [1:0]  bk_ena_img_mount;
 wire        bmp_rom_inserted;
 
-hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2)) hps_io
+hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(3)) hps_io
 (
 	.clk_sys(clk_sys),
 	.HPS_BUS(HPS_BUS),
@@ -378,14 +390,15 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2)) hps_io
 	.img_readonly(img_readonly),
 	.img_size(img_size),
 
-	.sd_lba('{sd_lba, sd_lba}),
+	.sd_lba('{sd_lba_bk, sd_lba_bk, sd_lba_cd}),
+    .sd_blk_cnt('{sd_blk_cnt_bk, sd_blk_cnt_bk, sd_blk_cnt_cd}),
 	.sd_rd(sd_rd),
 	.sd_wr(sd_wr),
 	.sd_ack(sd_ack),
 
 	.sd_buff_addr(sd_buff_addr),
 	.sd_buff_dout(sd_buff_dout),
-	.sd_buff_din('{sd_buff_din, sd_buff_din}),
+	.sd_buff_din('{sd_buff_din_bk, sd_buff_din_bk, 16'b0}),
 	.sd_buff_wr(sd_buff_wr),
 
 	.ioctl_download(ioctl_download),
@@ -400,7 +413,7 @@ hps_io #(.CONF_STR(CONF_STR), .WIDE(1), .VDNUM(2)) hps_io
 
 ///////////////////////   CLOCKS   ///////////////////////////////
 
-localparam CLK_RAM_MHZ = 100.0;
+localparam CLK_RAM_MHZ = 85.909090; // matches pll.output_clock_frequency1
 
 wire clk_sys, clk_ram;
 wire pll_locked;
@@ -455,14 +468,17 @@ pcfx_top #(.CLK_RAM_MHZ(CLK_RAM_MHZ))  pcfx_top
 	.img_readonly(img_readonly),
 	.img_size(img_size),
 
-	.sd_lba(sd_lba),
+	.sd_lba_bk(sd_lba_bk),
+	.sd_lba_cd(sd_lba_cd),
+    .sd_blk_cnt_bk(sd_blk_cnt_bk),
+    .sd_blk_cnt_cd(sd_blk_cnt_cd),
 	.sd_rd(sd_rd),
 	.sd_wr(sd_wr),
 	.sd_ack(sd_ack),
 
 	.sd_buff_addr(sd_buff_addr),
 	.sd_buff_dout(sd_buff_dout),
-	.sd_buff_din(sd_buff_din),
+	.sd_buff_din_bk(sd_buff_din_bk),
 	.sd_buff_wr(sd_buff_wr),
 
 	.ioctl_download(ioctl_download),
@@ -476,6 +492,9 @@ pcfx_top #(.CLK_RAM_MHZ(CLK_RAM_MHZ))  pcfx_top
     .bk_ena(bk_ena),
     .bk_load(status[7]),
     .bk_save(status[8]),
+    .bk_autoload_en(~status[11]),
+    .bk_autosave_en(~status[10]),
+    .bk_autosave_trg(OSD_STATUS),
     .bmp_rom_inserted(bmp_rom_inserted),
     .bmp_eject_rom(status[9]),
 
@@ -503,7 +522,10 @@ pcfx_top #(.CLK_RAM_MHZ(CLK_RAM_MHZ))  pcfx_top
 
 	.R(VGA_R),
 	.G(VGA_G),
-	.B(VGA_B)
+	.B(VGA_B),
+
+    .AUD_SLOUT(AUDIO_L),
+    .AUD_SROUT(AUDIO_R)
 );
 
 assign CLK_VIDEO = clk_sys;

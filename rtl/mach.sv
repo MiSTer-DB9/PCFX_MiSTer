@@ -14,6 +14,7 @@ module mach
    input         CE,
    input         RESn,
 
+   output        SDRAM_HBLANK,
    output        CPU_BCYSTn,
 
    output [19:0] ROM_A,
@@ -62,6 +63,14 @@ module mach
    output        KRAMB_REQ,
    input         KRAMB_ACK,
 
+   // CD-ROM block transfer interface
+   input         CD_EN,
+   output [31:0] CD_SD_LBA,
+   output        CD_SD_RD,
+   input         CD_SD_ACK,
+   output [12:0] CD_SDBUF_ADDR,
+   input [15:0]  CD_SDBUF_DOUT,
+
    input         hmi_t HMI,
 
    output [31:0] A,
@@ -74,7 +83,10 @@ module mach
    output        VID_VSn,
    output        VID_HSn,
    output        VID_VBL,
-   output        VID_HBL
+   output        VID_HBL,
+
+   output [15:0] AUD_SLOUT,
+   output [15:0] AUD_SROUT
    );
 
 wire [31:0]     cpu_a;
@@ -150,6 +162,23 @@ logic           dckkr, dckkr_negedge;
 logic           hs_posedge, hs_negedge;
 logic           vs_posedge, vs_negedge;
 
+wire            apu_csn;
+wire [15:0]     apu_slout, apu_srout;
+
+wire [15:0]     vpu_do;
+wire            vpu_csn;
+wire            vpu_vdmode;
+wire [23:0]     vpu_vd;
+
+wire [7:0]      kbus_di;
+wire            kbus_rhnl;
+wire            kbus_req_vpu, kbus_ack_vpu;
+wire [1:0]      kbus_csn_c30;
+
+wire [12:0]     rrama_a, rramb_a;
+wire [7:0]      rrama_di, rrama_do, rramb_di, rramb_do;
+wire            rrama_oen, rrama_wen, rramb_oen, rramb_wen;
+
 wire            mmc_csn;
 logic           mmc_busyn;
 wire            mmc_irqn;
@@ -157,6 +186,7 @@ wire [15:0]     mmc_do;
 wire [7:0]      mmc_scsi_do;
 wire            mmc_scsi_doe;
 
+wire            mmc_vdmode;
 logic [23:0]    mmc_vd;
 logic           mmc_vde;
 
@@ -169,9 +199,16 @@ logic [7:0]     scsi_cd_status;
 logic           scsi_cd_stat_get;
 logic [95:0]    scsi_cd_command;
 wire            scsi_cd_comm_send;
+logic           scsi_cd_dout_req;
+logic [79:0]    scsi_cd_dout;
+logic           scsi_cd_dout_send;
 logic [7:0]     scsi_cd_cd_data;
 logic           scsi_cd_cd_wr;
+logic           scsi_cd_cd_ready;
 logic           scsi_cd_cd_data_end;
+logic           scsi_cd_msgout_pend;
+logic [7:0]     scsi_cd_msgout;
+logic           scsi_cd_msgout_send;
 
 wire [1:0]      kp_latch;
 wire [1:0]      kp_clk;
@@ -233,8 +270,8 @@ fx_ga ga
      .IO_CEn(io_cen),
 
      .FX_GA_CSn(ga_csn),
-     .PSG_CSn(),
-     .VPU_CSn(),
+     .APU_CSn(apu_csn),
+     .VPU_CSn(vpu_csn),
      .VCE_CSn(vce_csn),
      .VDC0_CSn(vdc0_csn),
      .VDC1_CSn(vdc1_csn),
@@ -278,6 +315,8 @@ huc6261 vce
      .DI(cpu_d_o[15:0]),
      .DO(vce_do),
 
+     .SDRAM_HBLANK(SDRAM_HBLANK),
+
      .DCK70(dck70),
      .DCK70_NEGEDGE(dck70_negedge),
      .HSYNC_POSEDGE(hs_posedge),
@@ -290,7 +329,10 @@ huc6261 vce
 
      .DCKKR(dckkr),
      .DCKKR_NEGEDGE(dckkr_negedge),
+     .MMC_VDMODE(mmc_vdmode),
      .MMC_VD(mmc_vd),
+     .VPU_VDMODE(vpu_vdmode),
+     .VPU_VD(vpu_vd),
 
      .Y(VID_Y),
      .U(VID_U),
@@ -409,6 +451,75 @@ dpram #(.addr_width(16), .data_width(16), .disable_value(0)) vram1
      .cs_b('1)
      );
 
+huc6271 vpu
+   (
+    .CLK(CLK),
+    .CE(CE),
+    .RESn(RESn),
+    
+    .A(mem16_a[4:2]),
+    .DI(cpu_d_o[15:0]),
+    .DO(vpu_do),
+    .CSn(vpu_csn),
+    .WRn(ga_wrn),
+    .RDn(ga_rdn),
+
+    .KBUS_DI(kbus_di),
+    .KBUS_REQ(kbus_req_vpu),
+    .KBUS_ACK(kbus_ack_vpu),
+
+    .RA_A(rrama_a),
+    .RA_DI(rrama_di),
+    .RA_DO(rrama_do),
+    .RA_OEn(rrama_oen),
+    .RA_WEn(rrama_wen),
+
+    .RB_A(rramb_a),
+    .RB_DI(rramb_di),
+    .RB_DO(rramb_do),
+    .RB_OEn(rramb_oen),
+    .RB_WEn(rramb_wen),
+
+    .DCK(dckkr),
+    .HSYNC_NEGEDGE(hs_negedge),
+    .VDMODE(vpu_vdmode),
+    .VD(vpu_vd)
+    );
+
+dpram #(.addr_width(13), .data_width(8), .disable_value(0)) rrama
+    (
+     .clock(CLK),
+     .address_a(rrama_a),
+     .data_a(rrama_do),
+     .enable_a('1),
+     .wren_a(~rrama_wen),
+     .q_a(rrama_di),
+     .cs_a(~rrama_oen | ~rrama_wen),
+     .address_b('0),
+     .data_b('0),
+     .enable_b('1),
+     .wren_b('0),
+     .q_b(),
+     .cs_b('1)
+     );
+
+dpram #(.addr_width(13), .data_width(8), .disable_value(0)) rramb
+    (
+     .clock(CLK),
+     .address_a(rramb_a),
+     .data_a(rramb_do),
+     .enable_a('1),
+     .wren_a(~rramb_wen),
+     .q_a(rramb_di),
+     .cs_a(~rramb_oen | ~rramb_wen),
+     .address_b('0),
+     .data_b('0),
+     .enable_b('1),
+     .wren_b('0),
+     .q_b(),
+     .cs_b('1)
+     );
+
 huc6272 mmc
     (
      .CLK(CLK),
@@ -446,6 +557,7 @@ huc6272 mmc
      .HSYNC_NEGEDGE(hs_negedge),
      .VSYNC_POSEDGE(vs_posedge),
      .VSYNC_NEGEDGE(vs_negedge),
+     .VDMODE(mmc_vdmode),
      .VD(mmc_vd),
      .VDE(mmc_vde),
 
@@ -460,8 +572,36 @@ huc6272 mmc
      .SCSI_SELn(scsi_seln),
      .SCSI_CDn(scsi_cdn),
      .SCSI_REQn(scsi_reqn),
-     .SCSI_IOn(scsi_ion)
+     .SCSI_IOn(scsi_ion),
+
+     .KBUS_DO(kbus_di),
+     .KBUS_RHnL(kbus_rhnl),
+     .KBUS_REQ_C71(kbus_req_vpu),
+     .KBUS_ACK_C71(kbus_ack_vpu),
+     .KBUS_CSn_C30(kbus_csn_c30)
      );
+
+huc6230 apu
+   (
+    .CLK(CLK),
+    .RESn(RESn),
+    .CE(CE),
+
+    .A(mem16_a[5:1]),
+    .DI(cpu_d_o[7:0]),
+    .CSn(apu_csn),
+    .WRn(ga_wrn),
+
+    .KBUS_DI(kbus_di),
+    .KBUS_RHnL(kbus_rhnl),
+    .KBUS_CSn(kbus_csn_c30),
+
+    .DCK(dckkr),
+    .HSYNC_NEGEDGE(hs_negedge),
+
+    .SLOUT(apu_slout),
+    .SROUT(apu_srout)
+    );
 
 // SCSI <-> CD bridge
 scsi scsi_cd
@@ -473,6 +613,7 @@ scsi scsi_cd
      .SEL_N(scsi_seln),
      .ACK_N(scsi_ackn),
      .RST_N(scsi_rstn),
+     .ATN_N(scsi_atnn),
      .BSY_N(scsi_bsyn),
      .REQ_N(scsi_reqn),
      .MSG_N(scsi_msgn),
@@ -483,12 +624,16 @@ scsi scsi_cd
      .STAT_GET(scsi_cd_stat_get),
      .COMMAND(scsi_cd_command),
      .COMM_SEND(scsi_cd_comm_send),
-     .DOUT_REQ('0),
-     .DOUT(),
-     .DOUT_SEND(),
+     .DOUT_REQ(scsi_cd_dout_req),
+     .DOUT(scsi_cd_dout),
+     .DOUT_SEND(scsi_cd_dout_send),
      .CD_DATA(scsi_cd_cd_data),
      .CD_WR(scsi_cd_cd_wr),
+     .CD_READY(scsi_cd_cd_ready),
      .CD_DATA_END(scsi_cd_cd_data_end),
+     .MSGOUT_PEND(scsi_cd_msgout_pend),
+     .MSGOUT(scsi_cd_msgout),
+     .MSGOUT_SEND(scsi_cd_msgout_send),
      .STOP_CD_SND(),
      .DBG_DATAIN_CNT()
      );
@@ -520,6 +665,8 @@ always @* begin
         io_do = vdc1_do;
     else if (~ga_csn)
         io_do = ga_do;
+    else if (~vpu_csn)
+        io_do = vpu_do;
     else if (~mmc_csn)
         io_do = mmc_do;
     else
@@ -579,8 +726,23 @@ fake_cd fake_cd
      .COMMAND(scsi_cd_command),
      .COMM_SEND(scsi_cd_comm_send),
      .STATUS(scsi_cd_status),
+     .DOUT_REQ(scsi_cd_dout_req),
+     .DOUT(scsi_cd_dout),
+     .DOUT_SEND(scsi_cd_dout_send),
      .CD_DATA(scsi_cd_cd_data),
-     .CD_WR(scsi_cd_cd_wr)
+     .CD_WR(scsi_cd_cd_wr),
+     .CD_READY(scsi_cd_cd_ready),
+     .CD_DATA_END(scsi_cd_cd_data_end),
+     .MSGOUT_PEND(scsi_cd_msgout_pend),
+     .MSGOUT(scsi_cd_msgout),
+     .MSGOUT_SEND(scsi_cd_msgout_send),
+
+     .MEDIUM_EMPTY(~CD_EN),
+     .SD_LBA(CD_SD_LBA),
+     .SD_RD(CD_SD_RD),
+     .SD_ACK(CD_SD_ACK),
+     .SDBUF_ADDR(CD_SDBUF_ADDR),
+     .SDBUF_DOUT(CD_SDBUF_DOUT)
      );
 
 //////////////////////////////////////////////////////////////////////
@@ -605,10 +767,13 @@ hmi2kp hmi2kp
 assign A = cpu_a;
 assign VID_PCE = dck70;
 
+assign AUD_SLOUT = apu_slout;
+assign AUD_SROUT = apu_srout;
+
 //////////////////////////////////////////////////////////////////////
 
 always @(posedge CLK) if (0 && CE) begin
-    if (~io_cen & ~cpu_dan)
+    if (~io_cen & ~cpu_dan & ~cpu_readyn)
         $display("%t: %x %s %x", $realtime,A, (cpu_rw ? "R" : "w"), 
                  (cpu_rw ? cpu_d_i[15:0] : cpu_d_o[15:0]));
 end
@@ -620,6 +785,8 @@ always @(posedge CLK) if (1 && CE) begin
     else begin
         if (~cpu_bcystn & ~cpu_mrqn &
             ((cpu_a == 32'hFFFFFF90) | (cpu_a == 32'hFFFFFFD0)))
+            ERROR <= '1;
+        if (~cpu_dan & ~cpu_readyn & cpu_mrqn & cpu_st[0]) // HALT
             ERROR <= '1;
     end
 end
