@@ -6,40 +6,60 @@
 
 module huc6272_scsi
    (
-    input        CLK,
-    input        CE,
-    input        RESn,
+    input         CLK,
+    input         CE,
+    input         RESn,
 
     // SCSI (CD-ROM) interface
-    input [7:0]  SCSI_DI,
-    output [7:0] SCSI_DO,
-    output       SCSI_DOE,
-    output       SCSI_ATNn,
-    input        SCSI_BSYn,
-    output       SCSI_ACKn,
-    output       SCSI_RSTn,
-    input        SCSI_MSGn,
-    output       SCSI_SELn,
-    input        SCSI_CDn,
-    input        SCSI_REQn,
-    input        SCSI_IOn,
+    input [7:0]   SCSI_DI,
+    output [7:0]  SCSI_DO,
+    output        SCSI_DOE,
+    output        SCSI_ATNn,
+    input         SCSI_BSYn,
+    output        SCSI_ACKn,
+    output        SCSI_RSTn,
+    input         SCSI_MSGn,
+    output        SCSI_SELn,
+    input         SCSI_CDn,
+    input         SCSI_REQn,
+    input         SCSI_IOn,
 
     // Register file and status
-    input        rf_scsi_t rf_scsi,
-    output       st_scsi_t st_scsi
+    input         rf_scsi_t rf_scsi,
+    output        st_scsi_t st_scsi,
+
+    // Memory client interface
+    output        M_BA,
+    output [17:0] M_A,
+    input [15:0]  M_DI,
+    output [15:0] M_DO,
+    output [1:0]  M_BE,
+    output        M_WR,
+    output        M_REQ,
+    input         M_ACK
     );
 
-logic [7:0]     rxbuf;
+logic           req_posedge, req_posedge_d;
+logic [7:0]     rxbuf, dma_rxbuf;
 logic           dma_req, dma_req_set, dma_req_clr;
+logic           dma_a0;
+logic           dma_rxbuf_rd, dma_end;
+logic           dma_next_word;
 
 logic           reqn_d;
 logic           assert_ack_dma, assert_ack_cnt;
+logic           phase_match, phase_match_d;
+logic           block_int;
+
+logic           m_req;
+logic [15:0]    m_do;
 
 // Data transfer engine (for DMA)
 
-wire req_posedge = ~SCSI_REQn & reqn_d;
+assign req_posedge = ~SCSI_REQn & reqn_d;
 
 always @(posedge CLK) if (CE) begin
+    req_posedge_d <= req_posedge;
     reqn_d <= SCSI_REQn;
 
     if (~RESn) begin
@@ -51,11 +71,13 @@ always @(posedge CLK) if (CE) begin
     end
 end
 
-// REQn assertion or REG.7L write sets REG.5H[6].
-// RX buffer readout triggers ACKn pulse and clears REG.5H[6].
+// REQn assertion or REG.5L write or REG.7L write sets REG.5H[6] .
+// RX buffer readout or TX buffer write triggers ACKn pulse and clears REG.5H[6].
 
-assign dma_req_set = rf_scsi.dma_mode & (req_posedge | rf_scsi.start_dma_rx);
-assign dma_req_clr = rf_scsi.dma_mode & rf_scsi.rxbuf_rd;
+assign dma_req_set = rf_scsi.dma_mode & phase_match &
+                     (req_posedge_d | rf_scsi.start_dma_rx | rf_scsi.start_dma_tx);
+assign dma_req_clr = rf_scsi.dma_mode &
+                     (dma_rxbuf_rd | rf_scsi.rxbuf_rd | rf_scsi.txbuf_wr);
 
 always @(posedge CLK) if (CE) begin
     if (~RESn) begin
@@ -65,6 +87,54 @@ always @(posedge CLK) if (CE) begin
         dma_req <= (dma_req & ~dma_req_clr) | dma_req_set;
     end
 end
+
+// Buffer RX buffer input for word DMA transfer to KRAM
+always @(posedge CLK) begin
+    if (~RESn) begin
+        dma_a0 <= '0;
+        dma_rxbuf <= '0;
+        dma_rxbuf_rd <= '0;
+        dma_next_word <= '0;
+        dma_end <= '0;
+        m_do <= '0;
+        m_req <= '0;
+    end
+    else begin
+        if (CE) begin
+            dma_rxbuf_rd <= '0;
+            dma_next_word <= '0;
+
+            if (~rf_scsi.dma_en | dma_end) begin
+                dma_a0 <= '0;
+            end
+            else if (dma_req_set) begin
+                if (rf_scsi.start_dma_rx | rf_scsi.start_dma_tx)
+                    $display("huc6272_scsi: rf_scsi.dma_kba=%x, .dma_ka=%x, .dma_byte_cnt=%x, .dma_int_en=%x", 
+                             rf_scsi.dma_kba, rf_scsi.dma_ka, rf_scsi.dma_byte_cnt, rf_scsi.dma_int_en);
+                dma_a0 <= ~dma_a0;
+                if (~dma_a0) begin
+                    dma_rxbuf <= rxbuf;
+                    dma_rxbuf_rd <= '1;
+                end
+                else begin
+                    m_do <= {rxbuf, dma_rxbuf};
+                    m_req <= '1;
+                end
+            end
+            if (rf_scsi.reset_dma_end_int)
+                dma_end <= '0;
+        end
+
+        if (m_req & M_ACK) begin
+            m_req <= '0;
+            dma_rxbuf_rd <= '1;
+            dma_next_word <= '1;
+            dma_end <= (rf_scsi.dma_byte_cnt == 17'd1);
+        end
+    end
+end
+
+wire [17:1] dma_byte_cnt = rf_scsi.dma_byte_cnt; // debug aid
 
 // Enforce minimum ACKn pulse assertion and negation periods.
 always @(posedge CLK) if (CE) begin
@@ -88,6 +158,26 @@ always @(posedge CLK) if (CE) begin
     end
 end
 
+// Bus phase match detection
+assign phase_match = (~SCSI_IOn == rf_scsi.assert_io) &
+                     (~SCSI_CDn == rf_scsi.assert_cd) &
+                     (~SCSI_MSGn == rf_scsi.assert_msg);
+wire phase_mismatch = req_posedge & (~phase_match & phase_match_d);
+
+always @(posedge CLK) if (CE) begin
+    phase_match_d <= phase_match;
+
+    if (~RESn) begin
+        block_int <= '0;
+    end
+    else begin
+        if (~SCSI_RSTn | phase_mismatch)
+            block_int <= '1;
+        else if (rf_scsi.reset_int)
+            block_int <= '0;
+    end
+end
+
 // Bus hookups
 assign SCSI_DO = rf_scsi.dout;
 assign SCSI_DOE = SCSI_IOn & rf_scsi.assert_data;
@@ -104,5 +194,18 @@ assign st_scsi.ack = ~SCSI_ACKn;
 assign st_scsi.din = SCSI_DI;
 assign st_scsi.rxbuf = rxbuf;
 assign st_scsi.dma_req = dma_req;
+assign st_scsi.int_req_act = dma_end | block_int;
+assign st_scsi.dma_next = dma_next_word;
+assign st_scsi.dma_end = dma_end;
+assign st_scsi.phase_match = phase_match;
+assign st_scsi.block_int = block_int;
+
+// KRAM memory client interface
+assign M_BA = rf_scsi.dma_kba;
+assign M_A = {rf_scsi.dma_kpage, rf_scsi.dma_ka};
+assign M_DO = m_do;
+assign M_BE = '1;
+assign M_WR = '1;
+assign M_REQ = m_req;
 
 endmodule

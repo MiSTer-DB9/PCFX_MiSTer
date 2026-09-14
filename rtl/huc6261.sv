@@ -22,6 +22,9 @@ module huc6261
      input [15:0]     DI,
      output [15:0]    DO,
 
+     // SDRAM refresh timing
+     output reg       SDRAM_HBLANK,
+
      // VDC interface
      output           DCK70, // pixel clock enable
      output           DCK70_NEGEDGE,
@@ -33,10 +36,13 @@ module huc6261
      input [8:0]      VDC0_VD,
      input [8:0]      VDC1_VD,
 
-     // MMC (HuC6272 KING) video interface
+     // MMC (HuC6272 KING) and VPU (HuC6271 RAINBOW) video interface
      output           DCKKR, // pixel clock enable
      output           DCKKR_NEGEDGE,
+     input            MMC_VDMODE,
      input [23:0]     MMC_VD,
+     input            VPU_VDMODE,
+     input [23:0]     VPU_VD,
 
      // NTSC/YUV video output
      output reg [7:0] Y,
@@ -53,6 +59,7 @@ localparam [11:0] DISP_CLOCKS = 12'd2160;
 localparam [11:0] LINE_CLOCKS = 12'd2730;
 localparam [11:0] HS_CLOCKS = 12'd192;
 localparam [11:0] HS_OFF = 12'd47;
+localparam [11:0] SDRAM_HBL_OFF = 12'd100; // passes the eyeball test
 
 localparam [8:0] TOTAL_LINES = 9'd263;
 localparam [8:0] VS_LINES = 9'd3;
@@ -119,7 +126,9 @@ cr_t            cr, cr_next;
 logic [8:0]     cpa;
 logic [15:0]    cpdin, cpdout;
 logic           cpd_wr, cpd_wr_d;
-logic [7:0]     vdc_sp_cpao, vdc_bg_cpao;
+logic [7:0]     vdc_sp_cpao, vdc_bg_cpao, 
+                mmc_bg0_cpao, mmc_bg1_cpao, mmc_bg2_cpao, mmc_bg3_cpao,
+                vpu_cpao;
 logic [2:0]     pri_vdc_bg, pri_vdc_sp, pri_vpu,
                 pri_mmc_bg0, pri_mmc_bg1, pri_mmc_bg2, pri_mmc_bg3;
 logic [15:0]    ccr, ccr_next;
@@ -148,6 +157,11 @@ always @(posedge CLK) if (CE) begin
         cpa <= '0;
         vdc_sp_cpao <= '0;
         vdc_bg_cpao <= '0;
+        mmc_bg0_cpao <= '0;
+        mmc_bg1_cpao <= '0;
+        mmc_bg2_cpao <= '0;
+        mmc_bg3_cpao <= '0;
+        vpu_cpao <= '0;
         pri_vdc_bg <= '0;
         pri_vdc_sp <= '0;
         pri_vpu <= '0;
@@ -188,6 +202,16 @@ always @(posedge CLK) if (CE) begin
                             vdc_sp_cpao <= DI[15:8];
                             vdc_bg_cpao <= DI[7:0];
                         end
+                        5'd05: begin
+                            mmc_bg1_cpao <= DI[15:8];
+                            mmc_bg0_cpao <= DI[7:0];
+                        end
+                        5'd06: begin
+                            mmc_bg3_cpao <= DI[15:8];
+                            mmc_bg2_cpao <= DI[7:0];
+                        end
+                        5'd07:
+                            vpu_cpao <= DI[7:0];
                         5'h08: begin
                             pri_vdc_bg <= DI[0+:3];
                             pri_vdc_sp <= DI[4+:3];
@@ -340,6 +364,22 @@ always @(posedge CLK) begin
     end
 end
 
+task dump_regs();
+    $display("HuC6261 register dump");
+    $display("  00=%x 04=%x 05=%x 06=%x 07=%x",
+             cr,
+             {vdc_sp_cpao, vdc_bg_cpao},
+             {mmc_bg1_cpao, mmc_bg0_cpao},
+             {mmc_bg3_cpao, mmc_bg2_cpao},
+             {8'b0, vpu_cpao});
+    $display("  08=%x 09=%x 0d=%x 0e=%x 0f=%x",
+             {5'b0, pri_vpu, 1'b0, pri_vdc_sp, 1'b0, pri_vdc_bg},
+             {1'b0, pri_mmc_bg3, 1'b0, pri_mmc_bg2, 1'b0, pri_mmc_bg1, 1'b0, pri_mmc_bg0},
+             ccr, ble, spbl);
+    $display("  10=%x 11=%x 12=%x 13=%x 14=%x 15=%x",
+             bl1a, bl1b, bl2a, bl2b, bl3a, bl3b);
+endtask
+
 //////////////////////////////////////////////////////////////////////
 // "Fast" (dot processing) clock generator
 //
@@ -466,25 +506,58 @@ assign layers[0].cpe = ble_cpe_t'(vdc_spbg ? (ble.vdc_sp & {2{vdc_cce}})
 //////////////////////////////////////////////////////////////////////
 // MMC (KING) video input
 
+logic [8:0]     mmc_cpa;
+logic [23:0]    mmc_vd;
 logic           mmc_en, mmc_key;
 
 assign mmc_en = cr.bmg[0];
-assign mmc_key = mmc_en & |MMC_VD[16+:8];
+
+assign mmc_cpa = {mmc_bg0_cpao, 1'b0} + {1'b0, MMC_VD[7:0]};
+
+always @* begin
+    if (~MMC_VDMODE) begin // palette
+        mmc_key = mmc_en & |MMC_VD[0+:8];
+        mmc_vd = 24'(mmc_cpa);
+    end
+    else begin // YUV
+        mmc_key = mmc_en & |MMC_VD[16+:8];
+        mmc_vd = MMC_VD;
+    end
+end
 
 // MMC BG0
 assign layers[1].pri = pri_mmc_bg0;
 assign layers[1].key = mmc_key;
-assign layers[1].vd  = MMC_VD;
-assign layers[1].pal = '0;
+assign layers[1].vd  = mmc_vd;
+assign layers[1].pal = ~MMC_VDMODE;
 assign layers[1].cpe = ble.mmc_bg0;
 
 //////////////////////////////////////////////////////////////////////
-// [Placeholder] VPU (RAINBOW) video input
+// VPU (RAINBOW) video input
+
+logic [8:0]     vpu_cpa;
+logic [23:0]    vpu_vd;
+logic           vpu_en, vpu_key;
+
+assign vpu_en = cr.bg71;
+
+assign vpu_cpa = {vpu_cpao, 1'b0} + {2'b0, VPU_VD[6:0]};
+
+always @* begin
+    if (~VPU_VDMODE) begin // palette
+        vpu_key = vpu_en & |VPU_VD[0+:8];
+        vpu_vd = 24'(vpu_cpa);
+    end
+    else begin // YUV
+        vpu_key = '1; // TODO
+        vpu_vd = VPU_VD;
+    end
+end
 
 assign layers[2].pri = pri_vpu;
-assign layers[2].key = '0; // transparent
-assign layers[2].vd  = '0;
-assign layers[2].pal = '0;
+assign layers[2].key = vpu_key;
+assign layers[2].vd  = vpu_vd;
+assign layers[2].pal = ~VPU_VDMODE;
 assign layers[2].cpe = ble.vpu;
 
 //////////////////////////////////////////////////////////////////////
@@ -575,8 +648,8 @@ end
 always @* begin
     if (vmux.pal) begin
         mix_out.y = cp_out[8+:8];
-        mix_out.u = {cp_out[7:4], cp_out[6:4], cp_out[6]};
-        mix_out.v = {cp_out[3:0], cp_out[2:0], cp_out[2]};
+        mix_out.u = {cp_out[7:4], 4'b0000};
+        mix_out.v = {cp_out[3:0], 4'b0000};
     end
     else
         mix_out = yuv888_t'(mix_vd);
@@ -596,9 +669,14 @@ blxx_t          ccdp_m, ccdp_n;
 yuv888_t        ccdp_ccout;
 logic           ccdp_reg1_en;
 logic           ccdp_low_chroma;
+logic           ccdp_front, ccdp_back;
 
 // There are four processing phases per dot clock.
 wire [1:0] ccdp_phase = ckenkr_cnt[2:1];
+
+// One dot requires three processing phases, plus one if front/back
+// cellphane is enabled.
+wire [1:0] ccdp_last_phase = 2'd2 + ble.ed;
 
 // Cellophane calculation
 function [7:0] ccdp_cc(input [7:0] m, input [7:0] n, 
@@ -608,8 +686,8 @@ logic signed [12:0] ma;
     if (uv) begin
         m -= 8'sh80;
         n -= 8'sh80;
-        ma = $signed(m) * $signed(a);
-        ma += $signed(n) * $signed(b);
+        ma = $signed(m) * $signed(5'(a));
+        ma += $signed(n) * $signed(5'(b));
         ma += 13'(11'sh80 << 3);
     end
     else begin
@@ -641,8 +719,18 @@ function blxx_t get_ccdp_n(input ble_cpe_t cpe);
     endcase
 endfunction
 
-assign ccdp_m = get_ccdp_m(mix.cpe);
-assign ccdp_n = get_ccdp_n(mix.cpe);
+// Front/back cellophane selected
+assign ccdp_front = ble.ed &  ble.fb & (ccdp_phase == 2'd3);
+assign ccdp_back  = ble.ed & ~ble.fb & (ccdp_phase == 2'd0);
+
+always @* begin
+    ccdp_m = get_ccdp_m(mix.cpe);
+    ccdp_n = get_ccdp_n(mix.cpe);
+    if (ccdp_front) begin
+        ccdp_m = bl1a;
+        ccdp_n = bl1b;
+    end
+end
 
 always @* begin
     ccdp_ccout.y = ccdp_cc(ccdp_sel1.y, ccdp_reg1.y, ccdp_m.y, ccdp_n.y, 0);
@@ -655,8 +743,8 @@ always @* begin
     ccdp_sel1 = yuv888_t'(mix.vd);
     if (ccdp_sel1_ccr) begin
         ccdp_sel1.y = ccr[8+:8];
-        ccdp_sel1.u = {ccr[7:4], ccr[6:4], ccr[6]};
-        ccdp_sel1.v = {ccr[3:0], ccr[2:0], ccr[2]};
+        ccdp_sel1.u = {ccr[7:4], 4'b0000};
+        ccdp_sel1.v = {ccr[3:0], 4'b0000};
     end
 end
 
@@ -687,16 +775,23 @@ always @* begin
         ccdp_reg1_en = '1;
     end
     else begin
-        if (ccdp_phase < 2'd3) begin
-            prio_sel = ccdp_phase;
-            ccdp_reg1_en = mix.key;
-            ccdp_sel1_ccr = '0;
-            ccdp_sel2_cc = mix.cpe != CPE_OFF;
-        end
-        if (ccdp_phase == 2'd0 && !(ble.ed & ~ble.fb)) begin
-            // Special case for lowest priority layer
-            ccdp_low_chroma = '1;
+        if (ccdp_front | ccdp_back) begin
+            // Apply front/back cellophane
+            ccdp_sel1_ccr = '1;
+            ccdp_sel2_cc = ccdp_front;
             ccdp_reg1_en = '1;
+        end
+        if (~ccdp_sel1_ccr) begin
+            if (ccdp_phase <= ccdp_last_phase) begin
+                prio_sel = ccdp_phase - 1'(ble.ed & ~ble.fb);
+                ccdp_reg1_en = mix.key;
+                ccdp_sel2_cc = mix.cpe != CPE_OFF;
+            end
+            if (ccdp_phase == 2'd0 & ~ccdp_back) begin
+                // Special case for lowest priority layer
+                ccdp_low_chroma = '1;
+                ccdp_reg1_en = '1;
+            end
         end
     end
 end
@@ -708,6 +803,7 @@ assign vmux_low_chroma = ccdp_low_chroma;
 
 logic [11:0]    hsync_start_pos, hsync_end_pos;
 logic           hbl_ff = '1, vbl_ff = '1;
+logic           sdram_hbl_ff = '1;
 
 always @* begin
     hsync_start_pos = (cr.dc7 ? (LINE_CLOCKS - 12'd6) : 12'd8) - 1'd1;
@@ -748,12 +844,23 @@ always @(posedge CLK) begin
         vbl_ff <= '1;
 end
 
+// Generate an early H-Blank to drive SDRAM refresh.  This is much
+// earlier than true hbl, to ensure that the end of refresh doesn't
+// overlap with the start of HuC6272 BG fetch.
+always @(posedge CLK) begin
+    if (h_cnt == (LEFT_BL_CLOCKS - SDRAM_HBL_OFF))
+        sdram_hbl_ff <= '0;
+    else if (h_cnt == (LEFT_BL_CLOCKS - SDRAM_HBL_OFF) + DISP_CLOCKS)
+        sdram_hbl_ff <= '1;
+end
+
 //////////////////////////////////////////////////////////////////////
 // Final output
 
 always @(posedge CLK) if (DCK70) begin
     VBL <= vbl_ff;
     HBL <= hbl_ff;
+    SDRAM_HBLANK <= sdram_hbl_ff;
 
     Y <= ccdp_reg2.y;
     U <= ccdp_reg2.u;

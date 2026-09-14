@@ -7,8 +7,8 @@
 module huc6272_fabric_bank #(parameter CN = 8)
    (
     input         CLK,
-    input         CE,
     input         RESn,
+    input         DCK,
 
     // Client interfaces
     // Index 0 is highest priority
@@ -34,7 +34,9 @@ module huc6272_fabric_bank #(parameter CN = 8)
 
 localparam PN = $clog2(CN);
 
+logic           dck_d;
 logic           req, ack;
+logic           ack_d, ack_pend, ack_pend_d;
 
 logic [PN-1:0]  prio_hi, prio_sel, prio_sel_d;
 logic           prio_hi_valid;
@@ -54,26 +56,33 @@ end
 
 always @* begin
     prio_sel = prio_sel_d;
-    if (~prio_act_d & prio_hi_valid)
+    if (dck_d & ~prio_act_d & prio_hi_valid)
         prio_sel = prio_hi;
 end
 
-assign prio_act = (prio_act_d & ~prio_act_clr) | prio_act_set;
-assign req = cm_req[prio_sel];
-assign ack = dmc_m_ack;
+// Force request and completion to be DCK-aligned
+assign req = dck_d & cm_req[prio_sel];
+assign ack = (ack_d | ack_pend) & DCK;
+assign ack_pend = (ack_pend_d | dmc_m_ack) & ~ack_d;
 
-assign prio_act_clr = req & ack;
-assign prio_act_set = req & ~ack;
+assign prio_act_clr = ack;
+assign prio_act_set = req;
+assign prio_act = (prio_act_d & ~prio_act_clr) | prio_act_set;
 
 always @(posedge CLK) begin
     if (~RESn) begin
         prio_sel_d <= '0;
         prio_act_d <= '0;
+        ack_d <= '0;
+        ack_pend_d <= '0;
     end
     else begin
         prio_sel_d <= prio_sel;
         prio_act_d <= prio_act;
+        ack_d <= ack;
+        ack_pend_d <= ack_pend;
     end
+    dck_d <= DCK;
 end
 
 //////////////////////////////////////////////////////////////////////
@@ -82,7 +91,7 @@ assign dmc_m_a = cm_a[prio_sel];
 assign dmc_m_do = cm_do[prio_sel];
 assign dmc_m_be = cm_be[prio_sel];
 assign dmc_m_wr = cm_wr[prio_sel];
-assign dmc_m_req = req;
+assign dmc_m_req = prio_act & ~prio_act_d; // ctlr watches rising edge
 
 genvar          g;
 generate
